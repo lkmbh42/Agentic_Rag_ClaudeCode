@@ -1,0 +1,6 @@
+# Test/dev-only dependencies (not baked into the runtime images).
+# Install on top of requirements.txt to run the test suite.
+-r requirements.txt
+pytest==8.*
+pytest-asyncio==0.24.*
+reportlab==4.*          # generate sample PDFs for ingestion tests

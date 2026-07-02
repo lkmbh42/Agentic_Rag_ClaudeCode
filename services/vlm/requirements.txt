@@ -1,0 +1,5 @@
+# Phase 1 stub. Phase 3 adds the model stack (CPU):
+#   torch (cpu), transformers, qwen-vl-utils, accelerate, pillow
+fastapi==0.115.*
+uvicorn[standard]==0.32.*
+pydantic==2.*

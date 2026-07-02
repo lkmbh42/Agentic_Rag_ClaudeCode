@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Env / secrets — never commit the real .env
+.env
+.env.*
+!.env.example
+
+# Local data volumes (if bind-mounted under the repo)
+data/
+volumes/
+models/
+backups/
+
+# Node / admin-ui build artifacts (Phase 9)
+admin-ui/app/node_modules/
+admin-ui/app/dist/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log

@@ -1,0 +1,6 @@
+# Phase 1 stub keeps this slim so the dev image builds fast on a laptop.
+# Phase 4 adds the model stack:
+#   FlagEmbedding (BGE-M3 dense+sparse), torch, transformers
+fastapi==0.115.*
+uvicorn[standard]==0.32.*
+pydantic==2.*

@@ -1,0 +1,62 @@
+# Backend (FastAPI) + worker shared dependencies.
+# ML/serving deps (torch, FlagEmbedding, transformers) live in the per-service
+# requirements under services/*/requirements.txt so the backend image stays slim.
+#
+# Pins are conservative minor-version ranges; tighten to exact versions before
+# the Phase 8 production cut.
+
+# --- web / API ---
+fastapi==0.115.*
+uvicorn[standard]==0.32.*
+python-multipart==0.0.*
+sse-starlette==2.1.*
+
+# --- config / models ---
+pydantic==2.*
+pydantic-settings==2.*
+email-validator==2.*          # required by pydantic EmailStr (auth/admin schemas)
+python-dotenv==1.*
+
+# --- persistence (models + migrations land in Phase 2) ---
+SQLAlchemy==2.*
+alembic==1.*
+asyncpg==0.30.*
+psycopg2-binary==2.9.*
+
+# --- redis (queues, rate limits, jti denylist) ---
+redis==5.*
+
+# --- vector store client ---
+qdrant-client==1.12.*
+
+# --- auth ---
+python-jose[cryptography]==3.3.*
+bcrypt>=4.1,<6          # used directly; passlib is unmaintained / breaks on bcrypt 5.x
+
+# --- LLM client (OpenAI-compatible: works against both Ollama and vLLM) ---
+openai==1.54.*
+httpx==0.27.*
+
+# --- resilience / ops ---
+tenacity==9.*
+prometheus-client==0.21.*
+structlog==24.*
+
+# --- ingestion: parsing / OCR (Phase 3) ---
+pymupdf>=1.24,<2          # PDF text/images/render (bundles libs; no poppler needed)
+pdfplumber==0.11.*        # PDF table extraction
+pytesseract==0.3.*        # OCR (needs the tesseract-ocr binary, installed in image)
+Pillow>=10,<12
+python-docx==1.1.*
+openpyxl==3.1.*
+beautifulsoup4==4.12.*
+
+# --- agent graph (Phase 5) ---
+langgraph>=0.2,<0.3
+langgraph-checkpoint-postgres>=2,<3
+psycopg[binary]>=3.1,<4    # psycopg3 — required by the Postgres checkpointer
+psycopg-pool>=3.2,<4
+
+# --- observability (Phase 7): OpenTelemetry -> local Phoenix ---
+opentelemetry-sdk>=1.27,<2
+opentelemetry-exporter-otlp-proto-grpc>=1.27,<2

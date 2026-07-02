@@ -1,0 +1,8 @@
+# Real BGE-M3 + reranker stack (prod embeddings image).
+# Build with: docker build --build-arg INSTALL_MODELS=true -f docker/embeddings.Dockerfile .
+# torch is large; the dev image omits this and runs in stub mode.
+fastapi==0.115.*
+uvicorn[standard]==0.32.*
+pydantic==2.*
+FlagEmbedding==1.3.*
+torch==2.4.*

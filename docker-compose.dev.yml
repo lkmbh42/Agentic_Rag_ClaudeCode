@@ -1,0 +1,173 @@
+# ============================================================================
+# DEVELOPMENT stack — Windows 11 laptop, Docker Desktop + WSL2, CPU-only.
+# Self-contained: run exactly one command (per Phase 1 DoD):
+#
+#     docker compose -f docker-compose.dev.yml up
+#
+# Differences vs prod (see docs/dev-vs-prod.md):
+#   - LLM = Ollama (CPU), NOT vLLM/GPU
+#   - visual path = degraded -> no `vlm` service
+#   - no reverse proxy
+#   - reduced concurrency, source bind-mounts + --reload for fast iteration
+# ============================================================================
+name: agentic-rag-dev
+
+x-common-env: &common-env
+  env_file: [.env]
+
+services:
+  # --------------------------------------------------------------------- data
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-rag}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rag}
+      POSTGRES_DB: ${POSTGRES_DB:-rag}
+    # Host-published port is separate from the in-network port (5432) the app
+    # uses, so it can be remapped to dodge collisions with other local stacks.
+    ports: ["${POSTGRES_HOST_PORT:-5432}:5432"]
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rag} -d ${POSTGRES_DB:-rag}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    ports: ["${REDIS_HOST_PORT:-6379}:6379"]
+    volumes: ["redis_data:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    ports:
+      - "${QDRANT_HTTP_PORT:-6333}:6333"
+      - "${QDRANT_GRPC_PORT:-6334}:6334"
+    volumes: ["qdrant_data:/qdrant/storage"]
+    healthcheck:
+      # qdrant image is debian-slim (has bash); TCP-connect liveness on the HTTP port.
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/6333' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    ports:
+      - "${PHOENIX_PORT:-6006}:6006"
+      - "4317:4317"
+    volumes: ["phoenix_data:/mnt/data"]
+    environment:
+      PHOENIX_WORKING_DIR: /mnt/data
+    healthcheck:
+      # Phoenix image is distroless (no shell) -> exec-form CMD, not CMD-SHELL.
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:6006/healthz',timeout=3).status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  # ----------------------------------------------------------------- inference
+  ollama:
+    image: ollama/ollama:latest
+    ports: ["11434:11434"]
+    volumes: ["ollama_data:/root/.ollama"]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  embeddings:
+    build:
+      context: .
+      dockerfile: docker/embeddings.Dockerfile
+    <<: *common-env
+    environment:
+      EMBEDDINGS_DEVICE: cpu
+    ports: ["${EMBEDDINGS_PORT:-8001}:8001"]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8001/health',timeout=3).status==200 else 1)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ------------------------------------------------------------------- app tier
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    <<: *common-env
+    # Bind-mount source + hot reload for fast dev iteration.
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    volumes:
+      - ./app:/srv/app
+      - ./worker:/srv/worker
+      - documents_data:/data        # shared with worker: backend writes uploads
+    ports: ["${BACKEND_PORT:-8000}:8000"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      qdrant: {condition: service_healthy}
+      ollama: {condition: service_started}
+      embeddings: {condition: service_started}
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health',timeout=3).status==200 else 1)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    <<: *common-env
+    command: ["python", "-m", "worker.main"]
+    environment:
+      WORKER_HEARTBEAT_PATH: /tmp/worker_heartbeat
+    volumes:
+      - ./app:/srv/app
+      - ./worker:/srv/worker
+      - documents_data:/data        # shared with backend: worker reads uploads
+    depends_on:
+      redis: {condition: service_healthy}
+      postgres: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import os,time,sys; p=os.environ.get('WORKER_HEARTBEAT_PATH','/tmp/worker_heartbeat'); sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p)<20 else 1)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  admin-ui:
+    build:
+      context: .
+      dockerfile: docker/admin-ui.Dockerfile
+    ports: ["${ADMIN_UI_PORT:-8080}:80"]
+    healthcheck:
+      # 127.0.0.1 (not localhost): nginx listens on IPv4; busybox wget tries ::1 first.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  postgres_data:
+  redis_data:
+  qdrant_data:
+  phoenix_data:
+  ollama_data:
+  documents_data:
