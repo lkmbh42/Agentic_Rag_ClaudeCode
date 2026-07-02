@@ -1,10 +1,17 @@
-"""LLM client interface + an OpenAI-compatible implementation (the vLLM/Ollama
-wrapper).
+"""LLM client interface + an OpenAI-compatible implementation.
+
+This is THE single LLM client module (Phase 1): all LLM traffic — generation,
+routing, grading, judging — goes through `OpenAILLM` against whichever backend
+`settings.llm_base_url` points at (`settings.llm_backend` names it: vLLM in
+prod, Ollama in dev). Both speak the OpenAI chat-completions API, so no code
+branches on the backend.
 
 The interface is the seam graph nodes depend on, so tests inject a deterministic
 FakeLLM and the real model is never required to exercise graph structure. Methods
 are defensive: any LLM error degrades to a safe default rather than crashing the
-graph (circuit-breaker philosophy).
+graph (circuit-breaker philosophy). Request-level availability is a separate
+concern: `llm_available()` is a cheap cached reachability probe the gateway uses
+to return an explicit 503 instead of degrading silently when the backend is down.
 
 Streaming: `generate(..., on_token=cb)` streams tokens to `cb` as they arrive
 (SSE on /chat) and returns the full text.
@@ -14,15 +21,18 @@ from __future__ import annotations
 
 import json
 import logging
+import socket
+import time
 from collections.abc import Callable
 from functools import lru_cache
 from typing import Protocol
+from urllib.parse import urlparse
 
 from app.config import get_settings
 from app.graph import prompts
 from app.graph.state import ROUTES
 
-logger = logging.getLogger("rag.graph.llm")
+logger = logging.getLogger("rag.llm.client")
 _settings = get_settings()
 
 
@@ -37,8 +47,39 @@ class LLMClient(Protocol):
     def grade_grounded(self, answer: str, contexts: list[str]) -> bool: ...
 
 
+# ------------------------------------------------------------- availability
+def llm_hostport() -> tuple[str, int]:
+    """Host/port of the configured backend, for reachability probes."""
+    url = urlparse(_settings.llm_base_url)
+    host = url.hostname or "localhost"
+    port = url.port or (443 if url.scheme == "https" else 80)
+    return host, port
+
+
+_probe_state: tuple[float, bool] = (0.0, False)
+
+
+def llm_available(ttl_s: float = 5.0, timeout_s: float = 2.0) -> bool:
+    """Cheap TCP reachability probe of the LLM backend, cached for `ttl_s` so a
+    burst of chat requests doesn't stampede the socket. Used by the gateway to
+    fail fast with 503 instead of letting the graph degrade to empty answers."""
+    global _probe_state
+    checked_at, ok = _probe_state
+    now = time.monotonic()
+    if now - checked_at < ttl_s:
+        return ok
+    host, port = llm_hostport()
+    try:
+        with socket.create_connection((host, port), timeout=timeout_s):
+            ok = True
+    except OSError:
+        ok = False
+    _probe_state = (now, ok)
+    return ok
+
+
 class OpenAILLM:
-    """Talks to any OpenAI-compatible server (Ollama dev / vLLM prod)."""
+    """Talks to any OpenAI-compatible server (vLLM prod / Ollama dev)."""
 
     def __init__(self, model: str | None = None) -> None:
         from openai import OpenAI

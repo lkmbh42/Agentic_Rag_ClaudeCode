@@ -17,7 +17,7 @@ from __future__ import annotations
 from langgraph.graph import END, START, StateGraph
 
 from app.config import get_settings
-from app.graph.llm import LLMClient
+from app.llm.client import LLMClient
 from app.graph.nodes import Nodes
 from app.graph.state import COMPLEX_ROUTES, GraphState
 

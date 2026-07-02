@@ -13,7 +13,7 @@ import redis as sync_redis
 
 from app.config import get_settings
 from app.graph.citations import extract_citations
-from app.graph.llm import LLMClient
+from app.llm.client import LLMClient
 from app.graph.state import COMPLEX_ROUTES, INSUFFICIENT_ANSWER, GraphState
 from app.retrieval.retriever import Retriever
 from app.retrieval.semantic_cache import SemanticCache

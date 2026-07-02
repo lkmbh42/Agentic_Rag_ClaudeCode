@@ -3,8 +3,9 @@
 - /health        liveness: the process is up. Used by the Docker healthcheck so
                  the container reports healthy as soon as uvicorn serves, without
                  flapping while dependencies finish booting.
-- /health/ready  readiness: dependencies (Postgres, Redis, Qdrant) are reachable.
-                 Used for orchestration / smoke tests, not the container healthcheck.
+- /health/ready  readiness: dependencies (Postgres, Redis, Qdrant, LLM backend)
+                 are reachable. Used for orchestration / smoke tests, not the
+                 container healthcheck.
 
 Dependency checks are best-effort and time-bounded; a slow dependency must never
 hang the endpoint.
@@ -41,16 +42,21 @@ async def health() -> dict:
 
 @router.get("/health/ready")
 async def ready() -> JSONResponse:
+    from app.llm.client import llm_hostport
+
     s = get_settings()
+    llm_host, llm_port = llm_hostport()
     checks = await asyncio.gather(
         asyncio.to_thread(_tcp_ok, s.postgres_host, s.postgres_port),
         asyncio.to_thread(_tcp_ok, s.redis_host, s.redis_port),
         asyncio.to_thread(_tcp_ok, s.qdrant_host, s.qdrant_http_port),
+        asyncio.to_thread(_tcp_ok, llm_host, llm_port),
     )
     result = {
         "postgres": checks[0],
         "redis": checks[1],
         "qdrant": checks[2],
+        f"llm:{s.llm_backend}": checks[3],
     }
     all_ok = all(result.values())
     return JSONResponse(

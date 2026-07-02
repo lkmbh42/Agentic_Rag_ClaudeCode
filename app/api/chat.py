@@ -24,6 +24,7 @@ from app.core.deps import get_current_user
 from app.core.ratelimit import rate_limit
 from app.core.rbac import accessible_collection_ids
 from app.db.session import get_db
+from app.llm.client import llm_available
 from app.models.chat import ChatMessage, ChatSession
 from app.models.enums import AuditAction, MessageRole
 from app.models.user import User
@@ -39,6 +40,17 @@ from app.schemas.chat import (
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 _settings = get_settings()
+
+
+def _require_llm_backend() -> None:
+    """Fail fast with an explicit 503 when the LLM backend is down (Phase 1
+    graceful degradation) instead of running the graph into empty answers."""
+    if not llm_available():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"LLM backend ({_settings.llm_backend}) is unavailable — "
+                   "please try again shortly",
+        )
 
 
 async def _owned_session(
@@ -60,6 +72,7 @@ async def chat(
 ) -> ChatTurnResponse:
     """Run one agent-graph turn. The chat session id is the graph thread_id, so
     multi-turn context persists (Postgres checkpointer) across requests/restarts."""
+    _require_llm_backend()
     if body.session_id is not None:
         session = await _owned_session(body.session_id, user, db)
     else:
@@ -131,6 +144,7 @@ async def chat_stream(
     the final answer + citations. Cache-hit / insufficient paths emit no tokens
     and a single terminal `done` event.
     """
+    _require_llm_backend()
     if body.session_id is not None:
         session = await _owned_session(body.session_id, user, db)
     else:

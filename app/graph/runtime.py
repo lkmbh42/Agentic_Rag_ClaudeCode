@@ -13,6 +13,6 @@ from functools import lru_cache
 def get_graph():
     from app.graph.builder import build_graph
     from app.graph.checkpointer import build_checkpointer
-    from app.graph.llm import get_llm
+    from app.llm.client import get_llm
 
     return build_graph(get_llm(), checkpointer=build_checkpointer())

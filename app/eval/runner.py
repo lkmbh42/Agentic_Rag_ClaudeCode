@@ -12,7 +12,7 @@ from app.models.eval import EvalResult
 
 def default_chat_fn():
     """A chat_fn(system, user)->str backed by the configured LLM (Ollama/vLLM)."""
-    from app.graph.llm import OpenAILLM
+    from app.llm.client import OpenAILLM
 
     llm = OpenAILLM()
     return lambda system, user: llm._chat(system, user, max_tokens=16)

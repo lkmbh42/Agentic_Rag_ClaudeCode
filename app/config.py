@@ -8,6 +8,7 @@ worker so both share one source of truth.
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -52,6 +53,10 @@ class Settings(BaseSettings):
     tracing_enabled: bool = True
 
     # --- LLM (OpenAI-compatible: Ollama in dev, vLLM in prod) ---
+    # llm_backend names the serving backend for ops/health/rollback purposes
+    # (both speak the OpenAI API; no code branches on it). Rollback = flip this
+    # plus llm_base_url/llm_gen_model in env — see docs/CHANGELOG.md Phase 1.
+    llm_backend: Literal["ollama", "vllm"] = "ollama"
     llm_base_url: str = "http://ollama:11434/v1"
     llm_api_key: str = "not-needed-local"
     llm_gen_model: str = "qwen2.5:3b"
