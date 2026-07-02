@@ -37,12 +37,22 @@ async def _collection_id(base: str, token: str) -> str | None:
         return cols[0]["id"] if cols else None
 
 
-async def _user_loop(client, base, token, endpoint, payload, n, latencies, errors):
+# Mixed DE/EN query lengths for the /chat scenario (Phase 1 load test shape).
+CHAT_QUERIES = [
+    "Wie hoch ist das Tagegeld?",
+    "Summarize the remote work security policy and list every rule that applies to laptops.",
+    "Was regelt die IT-Richtlinie zu Passwörtern und wie oft müssen sie geändert werden?",
+    "Who approves business trips?",
+]
+
+
+async def _user_loop(client, base, token, endpoint, payloads, n, latencies, errors):
     headers = {"Authorization": f"Bearer {token}"}
-    for _ in range(n):
+    for i in range(n):
         t0 = time.perf_counter()
         try:
-            r = await client.post(f"{base}{endpoint}", headers=headers, json=payload)
+            r = await client.post(f"{base}{endpoint}", headers=headers,
+                                  json=payloads[i % len(payloads)])
             latencies.append((time.perf_counter() - t0) * 1000)
             if r.status_code >= 400:
                 errors.append(r.status_code)
@@ -71,7 +81,12 @@ async def main() -> int:
     args = ap.parse_args()
 
     token = await _login(args.base, args.email, args.password)
-    payload = {"query": args.query}
+    # /chat takes {"message": ...} and cycles mixed-length DE/EN queries;
+    # /search takes {"query": ...} with the single --query.
+    if args.endpoint.startswith("/chat"):
+        payloads = [{"message": q} for q in CHAT_QUERIES]
+    else:
+        payloads = [{"query": args.query}]
     if args.endpoint == "/search":
         coll = await _collection_id(args.base, token)
         if coll is None:
@@ -84,7 +99,7 @@ async def main() -> int:
     started = time.perf_counter()
     async with httpx.AsyncClient(timeout=60, limits=limits) as client:
         await asyncio.gather(*[
-            _user_loop(client, args.base, token, args.endpoint, payload,
+            _user_loop(client, args.base, token, args.endpoint, payloads,
                        args.requests_per_user, latencies, errors)
             for _ in range(args.users)
         ])
