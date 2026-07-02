@@ -27,6 +27,7 @@ from app.api.collections import router as collections_router
 from app.api.documents import router as documents_router
 from app.api.search import router as search_router
 from app.config import get_settings
+from app.core.deps import require_admin
 from app.db.session import engine
 from app.health import router as health_router
 
@@ -88,11 +89,12 @@ async def metrics() -> PlainTextResponse:
     return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
-@app.get("/metrics/summary")
+@app.get("/metrics/summary", dependencies=[Depends(require_admin)])
 async def metrics_summary(db: AsyncSession = Depends(get_db)) -> dict:
     """Live-ops rollup: queue depth, vLLM queue wait, indexing backlog, cache hit
     rate, and p50/p95/p99 end-to-end latency. This is what the admin dashboard
-    surfaces and what alerts fire on."""
+    surfaces and what alerts fire on. Admin-only: operational internals must not
+    be readable anonymously (Prometheus /metrics is protected at network level)."""
     from app.observability import metrics
 
     return await metrics.summary(db)

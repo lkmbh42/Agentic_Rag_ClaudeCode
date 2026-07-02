@@ -55,6 +55,33 @@ async def test_refresh_rotates_and_old_token_revoked(client, seed):
     assert r2.status_code == 401
 
 
+async def test_refresh_rejected_after_session_epoch_bump(client, seed):
+    """Regression: revoke-sessions must also kill refresh tokens, not just
+    access tokens — otherwise a refresh mints a fresh valid pair."""
+    from app.core.redis import bump_session_epoch
+
+    resp = await client.post(
+        "/auth/login",
+        json={"email": seed["bob"]["email"], "password": seed["bob"]["password"]},
+    )
+    refresh = resp.json()["refresh_token"]
+    await bump_session_epoch(seed["bob"]["id"])
+    r = await client.post("/auth/refresh", json={"refresh_token": refresh})
+    assert r.status_code == 401
+
+
+async def test_refresh_with_malformed_sub_401(client, seed):
+    from app.core import security
+
+    token = security.jwt.encode(
+        {"sub": "not-a-uuid", "type": security.REFRESH, "jti": "x",
+         "iat": 0, "exp": 4102444800},
+        security._settings.jwt_secret, algorithm=security._settings.jwt_algorithm,
+    )
+    r = await client.post("/auth/refresh", json={"refresh_token": token})
+    assert r.status_code == 401
+
+
 async def test_logout_revokes_access_token(client, seed, login):
     headers = await login(seed["alice"]["email"], seed["alice"]["password"])
     assert (await client.get("/auth/me", headers=headers)).status_code == 200

@@ -46,3 +46,35 @@ def test_docx_has_both_text_and_table(samples_dir):
 def test_unsupported_type_rejected():
     with pytest.raises(ValueError):
         filetype.detect("evil.exe", b"MZ\x90\x00")
+
+
+@pytest.mark.parametrize("hostile,expected", [
+    ("../../escape.txt", "escape.txt"),
+    ("..\\..\\escape.txt", "escape.txt"),
+    ("/etc/cron.d/evil", "evil"),
+    ("C:\\Windows\\evil.bat", "evil.bat"),
+    ("..", "upload.bin"),
+    ("", "upload.bin"),
+    ("report.pdf", "report.pdf"),
+])
+def test_safe_filename_strips_path_components(hostile, expected):
+    from app.ingestion.storage import safe_filename
+
+    assert safe_filename(hostile) == expected
+
+
+def test_save_document_cannot_escape_document_dir(tmp_path, monkeypatch):
+    """Regression: a client-controlled filename with path components must land
+    inside the per-document directory, never outside the storage root."""
+    import uuid as _uuid
+
+    from app.ingestion import storage
+
+    monkeypatch.setattr(storage._settings, "storage_dir", str(tmp_path))
+    doc_id = _uuid.uuid4()
+    path = storage.save_document(doc_id, "../../escape.txt", b"data")
+
+    inside = os.path.realpath(os.path.join(str(tmp_path), str(doc_id)))
+    assert os.path.realpath(path).startswith(inside)
+    assert storage.read_document(doc_id, "../../escape.txt") == b"data"
+    assert not (tmp_path.parent / "escape.txt").exists()

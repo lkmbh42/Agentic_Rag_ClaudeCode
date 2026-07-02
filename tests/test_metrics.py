@@ -1,9 +1,16 @@
-"""Metrics DoD: /metrics/summary returns the live-ops contract with real values."""
+"""Metrics DoD: /metrics/summary returns the live-ops contract with real values.
+The endpoint is admin-only (operational internals must not be anonymous)."""
 
 from __future__ import annotations
 
 
-async def test_metrics_summary_shape_and_values(client, seed):
+async def test_metrics_summary_requires_admin(client, seed, login):
+    assert (await client.get("/metrics/summary")).status_code == 401
+    alice = await login(seed["alice"]["email"], seed["alice"]["password"])
+    assert (await client.get("/metrics/summary", headers=alice)).status_code == 403
+
+
+async def test_metrics_summary_shape_and_values(client, seed, login):
     from app.observability import metrics
 
     metrics.record_latency(120.0)
@@ -11,7 +18,8 @@ async def test_metrics_summary_shape_and_values(client, seed):
     metrics.record_cache(True)
     metrics.record_cache(False)
 
-    resp = await client.get("/metrics/summary")
+    headers = await login(seed["admin"]["email"], seed["admin"]["password"])
+    resp = await client.get("/metrics/summary", headers=headers)
     assert resp.status_code == 200
     body = resp.json()
     assert set(body) == {

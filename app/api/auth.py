@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -12,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.core import security
 from app.core.deps import get_current_user
-from app.core.redis import is_revoked, revoke_jti
+from app.core.redis import is_revoked, revoke_jti, session_epoch
 from app.db.session import get_db
 from app.models.enums import AuditAction
 from app.models.user import User
@@ -30,6 +31,11 @@ _bearer = HTTPBearer(auto_error=True)
 
 
 def _client_ip(request: Request) -> str | None:
+    # Behind the prod nginx proxy the socket peer is the proxy; prefer the
+    # forwarded client (first hop) when present.
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
     return request.client.host if request.client else None
 
 
@@ -70,6 +76,14 @@ async def login(
         )
 
     if not user.is_active:
+        await record_audit(
+            db,
+            action=AuditAction.LOGIN_FAILED,
+            user_id=user.id,
+            detail={"email": body.email, "reason": "account_disabled"},
+            ip_address=_client_ip(request),
+        )
+        await db.commit()
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Account is disabled"
         )
@@ -106,10 +120,25 @@ async def refresh(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token revoked"
         )
 
-    user = await db.get(User, payload["sub"])
+    try:
+        user_id = uuid.UUID(payload.get("sub"))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
+        ) from exc
+
+    user = await db.get(User, user_id)
     if user is None or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
+        )
+
+    # Bulk revocation applies to refresh tokens too: a token issued before the
+    # user's session epoch (admin revoke-sessions / credential reset) must not
+    # be able to mint a fresh pair.
+    if float(payload.get("iat", 0)) < await session_epoch(user.id):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token revoked"
         )
 
     # Rotation: invalidate the presented refresh token so it cannot be reused.

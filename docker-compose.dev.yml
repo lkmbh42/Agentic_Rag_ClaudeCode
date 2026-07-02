@@ -145,7 +145,7 @@ services:
       redis: {condition: service_healthy}
       postgres: {condition: service_healthy}
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import os,time,sys; p=os.environ.get('WORKER_HEARTBEAT_PATH','/tmp/worker_heartbeat'); sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p)<20 else 1)\""]
+      test: ["CMD-SHELL", "python -c \"import os,time,sys; p=os.environ.get('WORKER_HEARTBEAT_PATH','/tmp/worker_heartbeat'); sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p)<300 else 1)\""]
       interval: 15s
       timeout: 5s
       retries: 5

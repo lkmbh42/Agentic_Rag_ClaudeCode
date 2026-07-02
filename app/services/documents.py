@@ -35,6 +35,10 @@ async def create_document(
         # 404, not 403 — don't reveal collections the user can't see.
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Collection not found")
 
+    # Sanitize before the row is created so the DB filename and the on-disk
+    # name (storage sanitizes again) always agree.
+    filename = storage.safe_filename(filename)
+
     try:
         file_type = filetype.detect(filename, data)
     except ValueError as exc:

@@ -102,6 +102,10 @@ def main() -> None:
         if item is None:
             continue
         queue, payload = item
+        # Refresh liveness at job start too: a long parse/OCR job must not let
+        # the heartbeat go stale mid-work (healthcheck window is generous, but
+        # the idle-tick touch alone only covers time between jobs).
+        _touch_heartbeat()
         if queue == _settings.ingest_queue:
             _handle_job(payload, redis_client, embedder, qindex)
         else:
