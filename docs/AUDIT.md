@@ -420,6 +420,6 @@ phase starts from evidence, not rediscovery.
 - [x] Dependency state audited; lockfiles committed (`requirements.lock`, service locks, `package-lock.json`); image digests in `docs/PINS.md`; compose/req-file pin edits deferred to Phase 1 per write-path rule (sole compose exception: F8 healthcheck stopgap, documented with Phase 5 revisit)
 - [x] Zero cloud endpoints in runtime code (§7); dev model staging documented as the sole, setup-time exception
 - [x] `eval/golden_v2.jsonl` — 130 QA pairs (100 text + 30 visual, DE+EN)
-- [ ] Baseline eval report `eval/reports/baseline.md` — **PENDING (Task 7)**; visual questions expected to fail
+- [x] Baseline eval report `eval/reports/baseline.md` — 130 cases against the live dev stack @ `1d589ea`; text judge 42.1% vs chart 0.0% / diagram 0.0% / table 11.7% — visual questions fail as expected (that is the baseline)
 
 Gate: awaiting operator "PHASE 0 APPROVED".
