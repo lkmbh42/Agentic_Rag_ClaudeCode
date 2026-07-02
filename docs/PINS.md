@@ -24,22 +24,23 @@ Reproduce: `docker run --rm <image> pip freeze > <lockfile>`.
 ⚠️ `npm install` reported **2 vulnerabilities (1 moderate, 1 high)** in the resolved tree.
 Full `npm audit` / `pip-audit` is Phase 5 scope; recorded here so it is not lost.
 
-## 3. Docker image digests (resolved, not yet applied)
+## 3. Docker image digests (compose pins APPLIED in Phase 1)
 
-Compose/Dockerfile references with their registry-resolved manifest digests. To apply in Phase 1,
-replace `image: <ref>` with `image: <name>@<digest>` (or `<name>:<tag>@<digest>` for readability).
+Compose references are digest-pinned as `image: <name>:<tag>@<digest>` since Phase 1.
+Dockerfile base-image digests remain recorded-only (applying them forces full image rebuilds;
+scheduled with the first CI setup).
 
 | Reference | Where | Digest | Status |
 |---|---|---|---|
-| `postgres:16-alpine` | compose (prod+dev) | `sha256:e013e867e712fec275706a6c51c966f0bb0c93cfa8f51000f85a15f9865a28cb` | tag-pinned |
-| `redis:7-alpine` | compose (prod+dev) | `sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99` | tag-pinned |
-| `qdrant/qdrant:v1.12.4` | compose (prod+dev) | `sha256:241edb9d7778327516ef218f8c74e1bd61b5ea42cd4f193cb8d0896199705636` | tag-pinned (best in repo) |
-| `arizephoenix/phoenix:latest` | compose (prod+dev) | `sha256:45a2dbd623d12f9924dc3d554a3f35574764541d7375d081787f0e06e4d3f2fa` | ⚠️ **FLOATING `:latest` — pin critical** |
-| `vllm/vllm-openai:latest` | compose (prod) | `sha256:251eba5cc7c12fed0b75da22a9240e582b1c9e39f6fbc064f86781b963bd814f` | ⚠️ **FLOATING `:latest` — pin critical** (CLAUDE.md Phase 1 task 1 requires pinned digest) |
-| `ollama/ollama:latest` | compose (dev) | `sha256:f1a705f2bd113fb8d15f85f7c217f0dc5f6bebda6b0cc42b82c3ad165ffcb9dc` | ⚠️ FLOATING — service removed entirely in Phase 1 |
-| `nginx:1.27-alpine` | compose (prod) + `docker/admin-ui.Dockerfile` | `sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10` | tag-pinned |
-| `python:3.11-slim` | `docker/{backend,embeddings,vlm}.Dockerfile` | `sha256:b27df5841f3355e9473f9a516d38a6783b6c8dfeacaf2d14a240f443b368ddb6` | tag-pinned (slim floats on patch releases) |
-| `node:20-alpine` | `docker/admin-ui.Dockerfile` (build stage) | `sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293` | tag-pinned |
+| `postgres:16-alpine` | compose (prod+dev) | `sha256:e013e867e712fec275706a6c51c966f0bb0c93cfa8f51000f85a15f9865a28cb` | ✅ pinned in compose (Phase 1) |
+| `redis:7-alpine` | compose (prod+dev) | `sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99` | ✅ pinned in compose (Phase 1) |
+| `qdrant/qdrant:v1.12.4` | compose (prod+dev) | `sha256:241edb9d7778327516ef218f8c74e1bd61b5ea42cd4f193cb8d0896199705636` | ✅ pinned in compose (Phase 1) |
+| `arizephoenix/phoenix:latest` | compose (prod+dev) | `sha256:45a2dbd623d12f9924dc3d554a3f35574764541d7375d081787f0e06e4d3f2fa` | ✅ pinned in compose (Phase 1) |
+| `vllm/vllm-openai:latest` | compose (prod) | `sha256:251eba5cc7c12fed0b75da22a9240e582b1c9e39f6fbc064f86781b963bd814f` | ✅ pinned in compose (Phase 1, DoD-critical) |
+| `ollama/ollama:latest` | compose (dev) | `sha256:f1a705f2bd113fb8d15f85f7c217f0dc5f6bebda6b0cc42b82c3ad165ffcb9dc` | ✅ pinned; ⚠️ service KEPT in dev (CPU-only dev host — flagged Phase 1 gate deviation; prod has no Ollama) |
+| `nginx:1.27-alpine` | compose (prod) + `docker/admin-ui.Dockerfile` | `sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10` | ✅ pinned in compose; Dockerfile ref recorded-only |
+| `python:3.11-slim` | `docker/{backend,embeddings,vlm}.Dockerfile` | `sha256:b27df5841f3355e9473f9a516d38a6783b6c8dfeacaf2d14a240f443b368ddb6` | recorded-only (CI setup applies) |
+| `node:20-alpine` | `docker/admin-ui.Dockerfile` (build stage) | `sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293` | recorded-only (CI setup applies) |
 
 Digests are multi-arch manifest-list digests (`docker buildx imagetools inspect`), valid for
 `image@digest` references on any platform.

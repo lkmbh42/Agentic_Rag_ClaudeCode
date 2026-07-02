@@ -18,7 +18,7 @@ x-common-env: &common-env
 services:
   # --------------------------------------------------------------------- data
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:e013e867e712fec275706a6c51c966f0bb0c93cfa8f51000f85a15f9865a28cb
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-rag}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rag}
@@ -35,7 +35,7 @@ services:
       start_period: 20s
 
   redis:
-    image: redis:7-alpine
+    image: redis:7-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99
     command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
     ports: ["${REDIS_HOST_PORT:-6379}:6379"]
     volumes: ["redis_data:/data"]
@@ -47,7 +47,7 @@ services:
       start_period: 10s
 
   qdrant:
-    image: qdrant/qdrant:v1.12.4
+    image: qdrant/qdrant:v1.12.4@sha256:241edb9d7778327516ef218f8c74e1bd61b5ea42cd4f193cb8d0896199705636
     ports:
       - "${QDRANT_HTTP_PORT:-6333}:6333"
       - "${QDRANT_GRPC_PORT:-6334}:6334"
@@ -61,7 +61,7 @@ services:
       start_period: 20s
 
   phoenix:
-    image: arizephoenix/phoenix:latest
+    image: arizephoenix/phoenix:latest@sha256:45a2dbd623d12f9924dc3d554a3f35574764541d7375d081787f0e06e4d3f2fa
     ports:
       - "${PHOENIX_PORT:-6006}:6006"
       - "4317:4317"
@@ -77,8 +77,12 @@ services:
       start_period: 40s
 
   # ----------------------------------------------------------------- inference
+  # DEV-ONLY DEVIATION from Phase 1 DoD ("Ollama removed from compose"): the dev
+  # host is CPU-only — the official vLLM image requires CUDA, so Ollama remains
+  # the dev OpenAI-compatible backend. Prod compose serves vLLM exclusively.
+  # Flagged as a hardware constraint at the Phase 1 gate; digest-pinned meanwhile.
   ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama:latest@sha256:f1a705f2bd113fb8d15f85f7c217f0dc5f6bebda6b0cc42b82c3ad165ffcb9dc
     ports: ["11434:11434"]
     volumes: ["ollama_data:/root/.ollama"]
     healthcheck:
