@@ -102,6 +102,13 @@ class Settings(BaseSettings):
     eval_enabled: bool = True
     chunk_target_chars: int = 1200
     chunk_overlap_chars: int = 150
+    # Phase 2 semantic chunker (token-based; see app/ingestion/chunker.py).
+    # Token counts use a deterministic chars-per-token estimator until the real
+    # Qwen tokenizer is provisioned (estimator is swappable, config over code).
+    chunk_min_tokens: int = 350
+    chunk_max_tokens: int = 600
+    chunk_overlap_ratio: float = 0.15
+    table_row_serialize_threshold: int = 8  # >N rows → additional row chunks
 
     # --- retrieval / cache ---
     retrieval_top_k: int = 20
