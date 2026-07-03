@@ -88,6 +88,13 @@ def test_job_retry_reuses_row_then_fails(sync_session, doc_row):
     assert job.status == IngestStatus.FAILED and "boom again" in job.error
 
 
+def test_job_started_for_deleted_document_raises_document_gone(sync_session):
+    """Regression: a stale queue payload for a deleted document crashed the
+    worker with an FK violation. It must raise DocumentGone (job dropped)."""
+    with pytest.raises(jobs.DocumentGone):
+        jobs.job_started(sync_session, None, str(uuid.uuid4()), attempt=0)
+
+
 # ---------------------------------------------------------------- dead letter
 @pytest.fixture
 def isolated_queues(monkeypatch):

@@ -51,12 +51,22 @@ async def latest_job(db: AsyncSession, document_id: uuid.UUID) -> IngestJob | No
 
 
 # -------------------------------------------------------------- sync (worker side)
+class DocumentGone(Exception):
+    """The queued document no longer exists (deleted between enqueue and pop).
+    The job is dropped — there is nothing to ingest or retry."""
+
+
 def _get_or_create(db: Session, job_id: str | None, document_id: str) -> IngestJob:
     if job_id:
         job = db.get(IngestJob, uuid.UUID(job_id))
         if job is not None:
             return job
     # Payload predates job tracking (or row was pruned) — track from here.
+    # Guard the FK: a stale payload for a deleted document must not raise.
+    from app.models.document import Document
+
+    if db.get(Document, uuid.UUID(document_id)) is None:
+        raise DocumentGone(document_id)
     job = IngestJob(document_id=uuid.UUID(document_id),
                     status=IngestStatus.QUEUED, attempt=0)
     db.add(job)

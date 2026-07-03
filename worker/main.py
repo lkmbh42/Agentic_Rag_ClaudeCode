@@ -56,32 +56,45 @@ def _handle_job(payload: str, redis_client, embedder, qindex: QdrantIndex) -> No
     document_id = job["document_id"]
     attempt = int(job.get("attempt", 0))
     with SyncSessionLocal() as db:
-        job_id = jobs.job_started(db, job.get("job_id"), document_id, attempt)
+        try:
+            job_id = jobs.job_started(db, job.get("job_id"), document_id, attempt)
+        except jobs.DocumentGone:
+            logger.warning("dropping stale job for deleted document %s", document_id)
+            return
+        except Exception as exc:  # noqa: BLE001 - tracking must never kill the loop
+            logger.error("job tracking failed for %s: %s — continuing untracked",
+                         document_id, exc)
+            db.rollback()
+            job_id = None
 
         def _stage(name: str) -> None:
             # Progress row + heartbeat: long stages must not stale the healthcheck.
             _touch_heartbeat()
-            jobs.job_stage(db, job_id, IngestStatus(name))
+            if job_id is not None:
+                jobs.job_stage(db, job_id, IngestStatus(name))
 
         try:
             count = index_document(db, uuid.UUID(document_id), embedder=embedder,
                                    qindex=qindex, on_stage=_stage)
-            jobs.job_finished(db, job_id)
+            if job_id is not None:
+                jobs.job_finished(db, job_id)
             logger.info("indexed %s (%d chunks, attempt %d)", document_id, count, attempt)
         except Exception as exc:  # noqa: BLE001
             will_retry = attempt + 1 < _settings.max_indexing_retries
-            jobs.job_finished(db, job_id, error=str(exc), requeued=will_retry)
+            if job_id is not None:
+                jobs.job_finished(db, job_id, error=str(exc), requeued=will_retry)
+            job_ref = str(job_id) if job_id is not None else None
             if will_retry:
                 logger.warning("index failed %s (attempt %d): %s — requeueing",
                                document_id, attempt, exc)
                 enqueue_index_sync(redis_client, document_id, attempt + 1,
-                                   job_id=str(job_id))
+                                   job_id=job_ref)
             else:
                 logger.error("index permanently failed %s after %d attempts: %s — dead-lettered",
                              document_id, attempt + 1, exc)
                 jobs.push_dlq(redis_client,
                               {"document_id": document_id, "attempt": attempt,
-                               "job_id": str(job_id)}, str(exc))
+                               "job_id": job_ref}, str(exc))
 
 
 def _handle_eval(payload: str, chat_fn) -> None:
@@ -124,12 +137,15 @@ def main() -> None:
         # the heartbeat go stale mid-work (healthcheck window is generous, but
         # the idle-tick touch alone only covers time between jobs).
         _touch_heartbeat()
-        if queue == _settings.ingest_queue:
-            _handle_job(payload, redis_client, embedder, qindex)
-        else:
-            if _judge_chat_fn is None:
-                _judge_chat_fn = default_chat_fn()
-            _handle_eval(payload, _judge_chat_fn)
+        try:
+            if queue == _settings.ingest_queue:
+                _handle_job(payload, redis_client, embedder, qindex)
+            else:
+                if _judge_chat_fn is None:
+                    _judge_chat_fn = default_chat_fn()
+                _handle_eval(payload, _judge_chat_fn)
+        except Exception as exc:  # noqa: BLE001 - one bad payload must never kill the worker
+            logger.exception("unhandled error for payload on %s: %s", queue, exc)
 
     logger.info("worker stopped cleanly")
 
