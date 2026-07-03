@@ -1,0 +1,7 @@
+# ColQwen2 visual-retrieval service (Phase 2). The model stack is installed
+# only for the GPU-host build (COLQWEN_IMPLEMENTED=true); the default stub needs
+# just the web deps. Pins tighten at provisioning (requirements.lock).
+fastapi==0.115.*
+uvicorn[standard]==0.32.*
+pydantic==2.*
+# Model stack (prod build, GPU): colpali-engine, torch, transformers, pillow.

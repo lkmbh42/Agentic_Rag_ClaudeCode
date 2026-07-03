@@ -90,6 +90,16 @@ class Settings(BaseSettings):
     # in degraded/dev, figures keep their document captions.
     captioner_timeout_s: int = 120
 
+    # --- visual page retrieval (Phase 2: ColQwen2 multivector, docs_pages) ---
+    colqwen_base_url: str = "http://colqwen:8003"
+    colqwen_timeout_s: int = 120
+    docs_pages_collection: str = "docs_pages"
+    page_render_max_px: int = 1024      # longest edge of the page PNG
+    colqwen_dim: int = 128              # per-patch multivector dimension
+    # Binary quantization on docs_pages (spec): ~32× storage cut for the
+    # multivector page index. Off only for debugging.
+    docs_pages_binary_quantization: bool = True
+
     # --- auth ---
     jwt_secret: str = "change-me"
     jwt_algorithm: str = "HS256"

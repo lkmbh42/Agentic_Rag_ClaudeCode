@@ -183,6 +183,34 @@ services:
       retries: 5
       start_period: 60s
 
+  colqwen:
+    build:
+      context: .
+      dockerfile: docker/colqwen.Dockerfile
+    <<: *common-env
+    # GPU at query + ingest (late-interaction page retrieval). Stub build runs
+    # CPU; the real model build sets COLQWEN_IMPLEMENTED=true and needs a GPU.
+    environment:
+      COLQWEN_DEVICE: ${COLQWEN_DEVICE:-cuda}
+      COLQWEN_MODEL: ${COLQWEN_MODEL:-vidore/colqwen2-v1.0}
+      COLQWEN_IMPLEMENTED: ${COLQWEN_IMPLEMENTED:-true}
+      COLQWEN_DIM: ${COLQWEN_DIM:-128}
+    volumes:
+      - ${MODELS_DIR:-./models}:/models:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8003/health',timeout=3).status==200 else 1)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
   # ------------------------------------------------------------------- app tier
   backend:
     build:
@@ -234,6 +262,7 @@ services:
       qdrant: {condition: service_healthy}
       vlm: {condition: service_healthy}
       minio: {condition: service_healthy}
+      colqwen: {condition: service_healthy}
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import os,time,sys; p=os.environ.get('WORKER_HEARTBEAT_PATH','/tmp/worker_heartbeat'); sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p)<300 else 1)\""]
       interval: 15s

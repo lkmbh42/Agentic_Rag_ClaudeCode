@@ -33,6 +33,17 @@
   **Flagged deferral (like Phase 1 load):** dev keeps `VISUAL_PATH=degraded` (figures retain
   document captions; MinIO upload + `image_uri` still exercised end-to-end), so the Phase 2
   caption-quality DoD gate (≥85 % useful) is measured on the GPU host, not the CPU dev stack.
+- **Page-image pipeline** (task 5): `app/ingestion/pages.py` renders each PDF page to a PNG
+  ≤1024 px (PyMuPDF, CPU) → MinIO `pages/{doc_id}/{page_no}.png` → ColQwen2 multivector via the
+  new `colqwen` service → Qdrant `docs_pages` (`app/ingestion/pages_index.py`): multivector
+  collection, `MAX_SIM` comparator, **binary quantization ON**, ACL payload with the SAME
+  `collection_id`/`document_id` keys as the text schema (Rule 5). Indexer runs the page pass for
+  PDFs when `visual_path == "full"`, best-effort (a page failure never fails the text ingest).
+  `colqwen` service: deterministic `[stub]` multivector in dev/CPU, real `vidore/colqwen2-v1.0`
+  (colpali-engine) when `COLQWEN_IMPLEMENTED=true` on the GPU host. Idempotency hardened: the
+  indexer now clears Postgres + Qdrant + MinIO for a document BEFORE re-parsing, so re-ingest
+  with a changed figure/page count leaves zero orphans. Visual retrieval quality (ColQwen2
+  embeddings need a GPU) is a Phase 3/GPU-host concern; the dev stub proves the index wiring.
 
 ## Phase 1 — Serving migration: Ollama → vLLM (in progress, 2026-07-02)
 

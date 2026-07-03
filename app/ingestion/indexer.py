@@ -20,9 +20,11 @@ from app.ingestion.pipeline import run_pipeline
 from app.ingestion.qdrant_index import QdrantIndex
 from app.models.chunk import DocumentChunk
 from app.models.document import Document
+from app.config import get_settings
 from app.models.enums import DocumentStatus
 
 logger = logging.getLogger("rag.ingestion.indexer")
+_settings = get_settings()
 
 
 def _clear_existing(db: Session, qindex: QdrantIndex, document_id: uuid.UUID) -> None:
@@ -70,6 +72,12 @@ def index_document(
         store = get_object_store()
         captioner = get_captioner()
         store.ensure_buckets()
+        qindex.ensure_collection()
+        # Idempotency: clear this document's prior chunks, vectors, and objects
+        # BEFORE re-parsing, so the figure sink writes into a clean slate and a
+        # re-ingest with a different figure/page count leaves no orphans.
+        _clear_existing(db, qindex, doc.id)
+        store.delete_document(doc.id)
         fig_counter = {"n": 0}
 
         def _figure_sink(el) -> str | None:
@@ -91,8 +99,6 @@ def index_document(
 
         if on_stage is not None:
             on_stage("indexing")
-        qindex.ensure_collection()
-        _clear_existing(db, qindex, doc.id)
 
         points = []
         for ch in chunks:
@@ -132,6 +138,22 @@ def index_document(
             ))
 
         qindex.upsert_points(points)
+
+        # Visual page pass (ColQwen2 → docs_pages). Full path only; PDFs only
+        # (rendering needs a page raster). Best-effort: a page-index failure
+        # must not fail the text ingest that already succeeded.
+        if _settings.visual_path == "full" and doc.file_type == "pdf":
+            try:
+                from app.ingestion.pages import index_pages
+                from app.ingestion.pages_index import PagesIndex
+
+                n_pages = index_pages(
+                    doc.id, doc.collection_id, pdf_bytes=data,
+                    file_name=doc.filename, file_type=doc.file_type,
+                    store=store, pages_index=PagesIndex())
+                logger.info("indexed %d page images for %s", n_pages, doc.id)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("page-image indexing failed for %s: %s", doc.id, exc)
 
         doc.status = DocumentStatus.INDEXED
         doc.page_count = page_count
