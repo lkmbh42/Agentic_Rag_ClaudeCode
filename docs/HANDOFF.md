@@ -12,9 +12,9 @@ Last updated: 2026-07-04 · Branch: `feat/multimodal-migration` · HEAD at hando
 
 1. `git log --oneline -15` and read `docs/CHANGELOG.md`.
 2. Confirm clean tree on `feat/multimodal-migration`.
-3. **Phase 2 is code-complete and committed but NOT approved.** Present the Phase 2
-   gate (section 4 below) and STOP. Do **not** start Phase 3 until the operator
-   writes exactly `PHASE 2 APPROVED`.
+3. **Phase 2 APPROVED 2026-07-04** (all three decisions + GPU deferrals ratified).
+   **Phase 3 is in progress** — see section 6 and CLAUDE.md Phase 3 for scope;
+   check `git log` + `docs/CHANGELOG.md` for what is already done.
 4. Do not re-do finished work. Everything is committed; verify, don't rebuild.
 
 ---
@@ -49,8 +49,8 @@ Non-negotiable rules that keep biting if forgotten:
 |---|---|---|
 | 0 — Audit & baseline | ✅ DONE, **APPROVED** 2026-07-02 | operator wrote PHASE 0 APPROVED |
 | 1 — Ollama→vLLM serving (text parity) | ✅ DONE, **APPROVED** 2026-07-03 | dev-Ollama hardware exception accepted |
-| 2 — Multimodal ingestion pipeline | ✅ **CODE-COMPLETE, awaiting gate** | **needs PHASE 2 APPROVED** |
-| 3 — Visual retrieval & fusion | ⏳ NEXT (do not start yet) | — |
+| 2 — Multimodal ingestion pipeline | ✅ DONE, **APPROVED** 2026-07-04 | operator wrote PHASE 2 APPROVED (decisions 1–3 + GPU deferrals ratified) |
+| 3 — Visual retrieval & fusion | 🔨 IN PROGRESS (started 2026-07-04) | — |
 | 4 — VLM answering & frontend | ⏳ | — |
 | 5 — Scale, security & cutover | ⏳ | — |
 

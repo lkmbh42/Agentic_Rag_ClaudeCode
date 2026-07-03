@@ -1,6 +1,11 @@
 # CHANGELOG — Multimodal RAG Migration
 
-## Phase 2 — Multimodal ingestion pipeline (in progress, 2026-07-03)
+## Phase 2 — Multimodal ingestion pipeline (gate: "PHASE 2 APPROVED", 2026-07-04)
+
+> Gate ratified all three flagged decisions: (1) BLPOP worker extended instead of arq/rq
+> rewrite, (2) captioning via the `vlm` service `POST /caption` superseding the 501 stub,
+> (3) GPU deferrals (caption quality, ColQwen2 retrieval quality, real-corpus volume run)
+> measured at GPU provisioning.
 
 - **MinIO object store** (task 1): digest-pinned service in both stacks, internal-network-only
   in prod, SSE-S3 on for every object (`MINIO_KMS_AUTO_ENCRYPTION=on`, verified by header
