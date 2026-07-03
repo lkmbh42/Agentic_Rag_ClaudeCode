@@ -7,6 +7,7 @@ import os
 # Canonical internal type tags.
 PDF = "pdf"
 DOCX = "docx"
+PPTX = "pptx"
 XLSX = "xlsx"
 CSV = "csv"
 TXT = "txt"
@@ -17,6 +18,7 @@ IMAGE = "image"
 _EXT_MAP = {
     ".pdf": PDF,
     ".docx": DOCX,
+    ".pptx": PPTX,
     ".xlsx": XLSX,
     ".csv": CSV,
     ".txt": TXT,
@@ -49,9 +51,9 @@ def detect(filename: str, data: bytes) -> str:
 
     ext = os.path.splitext(filename)[1].lower()
 
-    # ZIP-based OOXML (docx/xlsx) share the PK magic; disambiguate by extension.
+    # ZIP-based OOXML (docx/pptx/xlsx) share the PK magic; disambiguate by extension.
     if head[:2] == b"PK\x03\x04":
-        if ext in (".docx", ".xlsx"):
+        if ext in (".docx", ".pptx", ".xlsx"):
             return _EXT_MAP[ext]
         raise ValueError(f"Unsupported OOXML/zip file: {filename}")
 

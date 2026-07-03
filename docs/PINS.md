@@ -52,3 +52,9 @@ No model reference in the repo carries an HF revision hash (see `docs/AUDIT.md` 
 `CLAUDE.md` model manifest `<HF_REVISION_HASH>` placeholders must be filled by the operator
 during Phase 1 provisioning; CI enforcement ("no placeholder remains") lands with the first CI
 setup (none exists today).
+
+Phase 2 adds one entry to the manifest:
+
+| Role | Model | Serving | Pin |
+|---|---|---|---|
+| Layout + TableFormer (Docling) | `ds4sd/docling-models` | in-process (worker), staged via `scripts/stage-docling-models.sh` → `DOCLING_ARTIFACTS_PATH` | `<HF_REVISION_HASH>` (operator; script warns loudly when unpinned — dev-only) |

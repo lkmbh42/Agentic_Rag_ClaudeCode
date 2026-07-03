@@ -8,10 +8,14 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /srv
 
-# tesseract-ocr binary is required by pytesseract (scanned-PDF / image OCR).
+# tesseract-ocr binary is required by pytesseract and Docling's OCR fallback.
+# German + English language packs (Rule 8: corpus is DE-dominant with EN mixed).
 # PyMuPDF/pdfplumber/Pillow ship wheels, so no other system libs are needed.
+# libgl1/libglib2.0-0: opencv (imported by Docling's TableFormer) links libGL.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends tesseract-ocr \
+    && apt-get install -y --no-install-recommends \
+        tesseract-ocr tesseract-ocr-deu tesseract-ocr-eng \
+        libgl1 libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # psycopg2-binary + bcrypt ship wheels, so no compiler toolchain is needed.

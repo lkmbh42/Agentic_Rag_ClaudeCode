@@ -94,6 +94,13 @@ class Settings(BaseSettings):
 
     # --- ingestion ---
     storage_dir: str = "/data/documents"
+    # Phase 2 parser: docling (layout-aware, PDF/DOCX/PPTX/XLSX) with the
+    # legacy parser as explicit fallback and for plain-text types.
+    parser_backend: Literal["docling", "legacy"] = "docling"
+    ocr_languages: tuple[str, ...] = ("deu", "eng")  # Rule 8: DE-dominant corpus
+    # Pre-staged Docling model artifacts (Rule 2). None = library default cache
+    # (dev convenience); prod compose sets /models/docling.
+    docling_artifacts_path: str | None = None
     ingest_queue: str = "ingest:queue"
     ingest_dlq: str = "ingest:dlq"  # dead-letter list (Phase 2, admin-requeueable)
     eval_queue: str = "eval:queue"

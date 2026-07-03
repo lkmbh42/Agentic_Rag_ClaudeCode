@@ -220,8 +220,11 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL:-http://vllm:8000/v1}
       EMBEDDINGS_BACKEND: service
       RERANKER_BACKEND: service
+      # Docling parses in the worker; artifacts pre-staged, loaded offline (Rule 2).
+      DOCLING_ARTIFACTS_PATH: ${DOCLING_ARTIFACTS_PATH:-/models/docling}
     volumes:
       - documents_data:/data
+      - ${MODELS_DIR:-./models}:/models:ro
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}

@@ -32,13 +32,22 @@ qdrant-client==1.12.*
 # --- object store client (MinIO, Phase 2: figures + page renders) ---
 minio==7.2.*
 
+# --- layout-aware document parsing (Phase 2: Docling + TableFormer) ---
+# Docling's layout/table models are HF artifacts staged at provisioning
+# (scripts/stage-docling-models.sh) and loaded offline via artifacts_path.
+# EXACT pin: docling 2.15.* resolved an incompatible docling-core (2.84) that
+# broke imports — the pair must move together.
+docling==2.108.0
+
 # --- auth ---
 python-jose[cryptography]==3.3.*
 bcrypt>=4.1,<6          # used directly; passlib is unmaintained / breaks on bcrypt 5.x
 
 # --- LLM client (OpenAI-compatible: works against both Ollama and vLLM) ---
 openai==1.54.*
-httpx==0.27.*
+# 0.28: docling 2.108 requires >=0.28; openai 1.54 accepts <1. The 0.27→0.28
+# break (Request/Response content= keyword) does not touch our call sites.
+httpx==0.28.*
 
 # --- resilience / ops ---
 tenacity==9.*

@@ -13,9 +13,11 @@ from app.models.enums import ChunkType
 # (filename, chunk type that MUST appear in the output)
 CASES = [
     ("normal.pdf", ChunkType.TEXT),
-    ("scanned.pdf", ChunkType.OCR),
+    # Docling path (Phase 2): scanned pages OCR into real TEXT chunks instead
+    # of the legacy OCR-marker type.
+    ("scanned.pdf", ChunkType.TEXT),
     ("table.pdf", ChunkType.TABLE),
-    ("chart.pdf", ChunkType.IMAGE),   # degraded visual path -> uninterpreted image
+    ("chart.pdf", ChunkType.IMAGE),   # figure crop; VLM captioning replaces content in P2.5
     ("sample.csv", ChunkType.TABLE),
     ("sample.docx", ChunkType.TEXT),
     ("sample.xlsx", ChunkType.TABLE),
