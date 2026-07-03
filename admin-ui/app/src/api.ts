@@ -135,4 +135,15 @@ export const api = {
   },
   reindexDocument: (id: string) => req(`/documents/${id}/reindex`, { method: "POST" }),
   deleteDocument: (id: string) => req(`/documents/${id}`, { method: "DELETE" }),
+  ingestStatus: (id: string) =>
+    req<IngestJob | null>(`/documents/${id}/ingest-status`),
+};
+
+export type IngestJob = {
+  status: "queued" | "parsing" | "captioning" | "indexing" | "indexed" | "failed";
+  attempt: number;
+  error: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  updated_at: string;
 };

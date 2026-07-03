@@ -5,7 +5,19 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from app.models.enums import DocumentStatus
+from app.models.enums import DocumentStatus, IngestStatus
+
+
+class IngestJobOut(BaseModel):
+    """Latest ingestion job for a document (Phase 2 admin UI)."""
+    status: IngestStatus
+    attempt: int
+    error: str | None
+    started_at: datetime | None
+    finished_at: datetime | None
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 class DocumentOut(BaseModel):

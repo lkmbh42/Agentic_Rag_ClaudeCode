@@ -53,6 +53,11 @@
   fidelity (≥90 %) and caption-usefulness (≥85 %) review. **docs_pages storage measured:**
   MAX_SIM multivector + binary quantization (`always_ram`) confirmed active — ~32× vs float32
   (400 KB → 12.5 KB for 50 pages × 16 patches × 128 dims).
+- **Admin UI ingestion status** (task 7): `GET /documents/{id}/ingest-status` (ACL-scoped) exposes
+  the latest `ingest_jobs` row; the React Documents view shows the fine-grained pipeline stage
+  (queued/parsing/captioning/indexing/indexed/failed), attempt count, a re-ingest button, and the
+  failure reason inline on failed rows. `tsc --noEmit` clean; backend endpoint tested incl.
+  cross-ACL 404.
 
 ## Phase 1 — Serving migration: Ollama → vLLM (in progress, 2026-07-02)
 

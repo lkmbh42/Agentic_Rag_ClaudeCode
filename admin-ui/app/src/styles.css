@@ -51,6 +51,10 @@ th { color: var(--muted); font-weight: 600; }
 .badge.bad { color: var(--danger); border-color: var(--danger); }
 .muted { color: var(--muted); }
 .error { color: var(--danger); }
+.fail-reason {
+  color: var(--danger); font-size: .72rem; margin-top: .2rem; max-width: 22rem;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: help;
+}
 
 /* chat — ChatGPT/Claude-style: conversations left, thread right */
 .chatgpt { display: grid; grid-template-columns: 270px 1fr; height: 100vh; }

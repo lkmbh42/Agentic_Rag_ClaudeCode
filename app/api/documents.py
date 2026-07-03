@@ -24,7 +24,8 @@ from app.core.rbac import accessible_collection_ids, can_access_collection
 from app.db.session import get_db
 from app.models.document import Document
 from app.models.user import User
-from app.schemas.document import DocumentOut, DocumentUploadResponse
+from app.ingestion.jobs import latest_job
+from app.schemas.document import DocumentOut, DocumentUploadResponse, IngestJobOut
 from app.services import documents as docsvc
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -77,6 +78,21 @@ async def get_document(
     if doc is None or not await can_access_collection(db, user, doc.collection_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
     return doc
+
+
+@router.get("/{document_id}/ingest-status", response_model=IngestJobOut | None)
+async def ingest_status(
+    document_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> IngestJobOut | None:
+    """Latest ingestion job (queued/parsing/captioning/indexing/indexed/failed)
+    for a document the user can access. Powers the admin ingestion status view."""
+    doc = await db.get(Document, document_id)
+    if doc is None or not await can_access_collection(db, user, doc.collection_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
+    job = await latest_job(db, document_id)
+    return IngestJobOut.model_validate(job) if job is not None else None
 
 
 @router.post("/{document_id}/reindex", response_model=DocumentOut)

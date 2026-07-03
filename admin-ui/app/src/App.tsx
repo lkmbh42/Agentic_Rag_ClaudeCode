@@ -258,15 +258,15 @@ function Documents() {
       {msg && <div className="notice">{msg}</div>}
       {error && <Err msg={error} />}
       <table>
-        <thead><tr><th>File</th><th>Type</th><th>Status</th><th>Pages</th><th>Actions</th></tr></thead>
+        <thead><tr><th>File</th><th>Type</th><th>Ingestion</th><th>Pages</th><th>Actions</th></tr></thead>
         <tbody>
           {data?.map((d) => (
             <tr key={d.id}>
               <td>{d.filename}</td><td>{d.file_type}</td>
-              <td><span className={`badge ${d.status === "indexed" ? "ok" : d.status === "failed" ? "bad" : ""}`}>{d.status}</span></td>
+              <td><IngestCell doc={d} /></td>
               <td>{d.page_count ?? "—"}</td>
               <td className="row-actions">
-                <button onClick={async () => { await api.reindexDocument(d.id); reload(); }}>Reindex</button>
+                <button onClick={async () => { await api.reindexDocument(d.id); reload(); }}>Re-ingest</button>
                 <button className="danger" onClick={async () => { if (confirm(`Delete ${d.filename}?`)) { await api.deleteDocument(d.id); reload(); } }}>Delete</button>
               </td>
             </tr>
@@ -274,6 +274,30 @@ function Documents() {
         </tbody>
       </table>
     </>
+  );
+}
+
+// Fine-grained ingestion status from ingest_jobs: shows the pipeline stage
+// (queued/parsing/captioning/indexing/indexed/failed) and, on failure, the
+// reason. Falls back to the coarse document status when no job row exists yet.
+function IngestCell({ doc }: { doc: any }) {
+  const [job, setJob] = useState<import("./api").IngestJob | null | undefined>(undefined);
+  useEffect(() => {
+    let live = true;
+    api.ingestStatus(doc.id).then((j) => { if (live) setJob(j); }).catch(() => { if (live) setJob(null); });
+    return () => { live = false; };
+  }, [doc.id, doc.status]);
+
+  const stage = job?.status ?? doc.status;
+  const cls = stage === "indexed" ? "ok" : stage === "failed" ? "bad" : "";
+  return (
+    <span>
+      <span className={`badge ${cls}`}>{stage}</span>
+      {job?.attempt ? <span className="muted"> · try {job.attempt + 1}</span> : null}
+      {stage === "failed" && (job?.error || doc.error) && (
+        <div className="fail-reason" title={job?.error || doc.error}>{job?.error || doc.error}</div>
+      )}
+    </span>
   );
 }
 
