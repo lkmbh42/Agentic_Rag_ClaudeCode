@@ -61,7 +61,33 @@ def index_document(
         if on_stage is not None:
             on_stage("parsing")
         data = storage.read_document(doc.id, doc.filename)
-        chunks, page_count = run_pipeline(data, doc.file_type)
+
+        # Figure sink: crop -> MinIO, caption via VLM, embed the caption as the
+        # figure chunk's content. A figure appearing flips the job to CAPTIONING.
+        from app.ingestion.figures import get_captioner
+        from app.ingestion.object_store import get_object_store
+
+        store = get_object_store()
+        captioner = get_captioner()
+        store.ensure_buckets()
+        fig_counter = {"n": 0}
+
+        def _figure_sink(el) -> str | None:
+            png = el.metadata.get("image_png")
+            if not png:
+                return None
+            if on_stage is not None:
+                on_stage("captioning")
+            fig_counter["n"] += 1
+            figure_id = f"p{el.page or 0}-{fig_counter['n']:03d}"
+            uri = store.put_figure(doc.id, figure_id, png)
+            caption = captioner.caption(
+                png, kind=el.kind.value, page=el.page, fallback=el.content or None)
+            el.content = caption  # becomes the figure chunk's text
+            return uri
+
+        chunks, page_count = run_pipeline(data, doc.file_type,
+                                          figure_sink=_figure_sink)
 
         if on_stage is not None:
             on_stage("indexing")

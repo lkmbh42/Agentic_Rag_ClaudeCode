@@ -21,6 +21,18 @@
 - Spec module-name mapping: `ingest/parser.py|chunker.py|figures.py|pages.py` →
   `app/ingestion/docling_parser.py|chunker.py|figures.py|pages.py` (consistent with the
   existing package layout).
+- **Figure pipeline** (task 4): `app/ingestion/figures.py` + indexer `figure_sink` — each
+  Docling figure crop is uploaded to MinIO (`figures/{doc_id}/{figure_id}.png`), captioned via
+  the `vlm` service `POST /caption` (Qwen2.5-VL-7B, fixed DE/EN prompt: description, axis/legend
+  values, visible text/OCR, trends), and becomes a `type=figure` chunk carrying `image_uri`.
+  A figure appearing flips the job to CAPTIONING. **Decision:** captioning reuses the existing
+  worker→`vlm` service boundary (CLAUDE.md §10: the 501 stub is *superseded* by the captioner),
+  not a parallel endpoint. The `vlm` service now serves `/caption` with a deterministic,
+  clearly-labelled `[STUB-Caption]` stub in dev/CPU and the real model when `VLM_IMPLEMENTED=true`
+  on the GPU host. Captioning never raises — any failure degrades to the document's own caption.
+  **Flagged deferral (like Phase 1 load):** dev keeps `VISUAL_PATH=degraded` (figures retain
+  document captions; MinIO upload + `image_uri` still exercised end-to-end), so the Phase 2
+  caption-quality DoD gate (≥85 % useful) is measured on the GPU host, not the CPU dev stack.
 
 ## Phase 1 — Serving migration: Ollama → vLLM (in progress, 2026-07-02)
 

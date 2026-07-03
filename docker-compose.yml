@@ -171,6 +171,9 @@ services:
     environment:
       VLM_DEVICE: cpu
       VISUAL_PATH: full
+      VLM_MODEL: ${VLM_MODEL:-Qwen/Qwen2.5-VL-7B-Instruct}
+      # Real captioning on prod; flip to load the model. Default stub is safe.
+      VLM_IMPLEMENTED: ${VLM_IMPLEMENTED:-true}
     volumes:
       - ${MODELS_DIR:-./models}:/models:ro
     healthcheck:

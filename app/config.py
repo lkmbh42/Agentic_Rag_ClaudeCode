@@ -85,6 +85,10 @@ class Settings(BaseSettings):
     # --- VLM / visual path ---
     vlm_base_url: str = "http://vlm:8002"
     visual_path: str = "degraded"  # degraded | full
+    # Figure captioning (Phase 2): the worker calls vlm_base_url `/caption`
+    # (Qwen2.5-VL-7B). Enabled only when visual_path == "full" (prod GPU host);
+    # in degraded/dev, figures keep their document captions.
+    captioner_timeout_s: int = 120
 
     # --- auth ---
     jwt_secret: str = "change-me"
