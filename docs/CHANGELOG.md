@@ -44,6 +44,15 @@
   indexer now clears Postgres + Qdrant + MinIO for a document BEFORE re-parsing, so re-ingest
   with a changed figure/page count leaves zero orphans. Visual retrieval quality (ColQwen2
   embeddings need a GPU) is a Phase 3/GPU-host concern; the dev stub proves the index wiring.
+- **Gate tests + sampling harness** (task 8): `app/ingestion/acl_audit.py` scans a Qdrant
+  collection for any object missing the `collection_id`/`document_id` ACL payload (Rule 5),
+  reused by the Phase 5 red-team. Automated CI gates (`tests/test_ingest_gates.py`):
+  re-ingesting an unchanged document creates ZERO new vectors (idempotency), and 100 % of
+  indexed objects carry the ACL payload. `eval/ingest_sample.py` emits a side-by-side HTML
+  report (rendered page image next to extracted text/table/figure chunks) for manual table-
+  fidelity (≥90 %) and caption-usefulness (≥85 %) review. **docs_pages storage measured:**
+  MAX_SIM multivector + binary quantization (`always_ram`) confirmed active — ~32× vs float32
+  (400 KB → 12.5 KB for 50 pages × 16 patches × 128 dims).
 
 ## Phase 1 — Serving migration: Ollama → vLLM (in progress, 2026-07-02)
 
