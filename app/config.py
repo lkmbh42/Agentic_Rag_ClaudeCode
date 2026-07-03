@@ -95,6 +95,7 @@ class Settings(BaseSettings):
     # --- ingestion ---
     storage_dir: str = "/data/documents"
     ingest_queue: str = "ingest:queue"
+    ingest_dlq: str = "ingest:dlq"  # dead-letter list (Phase 2, admin-requeueable)
     eval_queue: str = "eval:queue"
     # Async LLM-as-judge eval. On the single-CPU dev model it competes with chat
     # for Ollama, so disable in dev; enable on the prod GPU. (The eval pipeline is

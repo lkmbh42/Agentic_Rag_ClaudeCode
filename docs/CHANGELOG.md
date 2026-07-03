@@ -1,5 +1,27 @@
 # CHANGELOG — Multimodal RAG Migration
 
+## Phase 2 — Multimodal ingestion pipeline (in progress, 2026-07-03)
+
+- **MinIO object store** (task 1): digest-pinned service in both stacks, internal-network-only
+  in prod, SSE-S3 on for every object (`MINIO_KMS_AUTO_ENCRYPTION=on`, verified by header
+  assertion in `tests/test_object_store.py`). Client: `app/ingestion/object_store.py`
+  (spec bucket layout, internal `s3://` URIs, no presigned/public URLs ever — Rule 5).
+- **Semantic chunker** (task 3): `app/ingestion/chunker.py` — 350–600-token windows,
+  15 % overlap, heading-bounded; tables → GitHub-MD chunk + deterministic one-line summary
+  + row-serialized chunks (>8 rows); never whitespace-flattened.
+- **Queue-driven workers** (task 6): `ingest_jobs` Postgres table (migration `d91a4b7f02e1`),
+  worker advances QUEUED→PARSING→INDEXING→INDEXED/FAILED, retries reuse the job row,
+  permanent failures dead-letter to `ingest:dlq` with admin-requeue helper
+  (`app/ingestion/jobs.py`). **Design decision (spec said "e.g. arq or rq"):** the existing
+  BLPOP worker was EXTENDED, not replaced — it already provided the Redis queue +
+  content-hash idempotency; the spec's remaining requirements (resumable, DLQ, Postgres
+  progress) were added surgically. A framework rewrite would have violated the brownfield
+  rule (Rule: no rewrite of working modules without operator approval) for zero property gain.
+  Operator ratifies this choice at the Phase 2 gate.
+- Spec module-name mapping: `ingest/parser.py|chunker.py|figures.py|pages.py` →
+  `app/ingestion/docling_parser.py|chunker.py|figures.py|pages.py` (consistent with the
+  existing package layout).
+
 ## Phase 1 — Serving migration: Ollama → vLLM (in progress, 2026-07-02)
 
 - **Single LLM client module** (spec location): `app/graph/llm.py` → `app/llm/client.py`.

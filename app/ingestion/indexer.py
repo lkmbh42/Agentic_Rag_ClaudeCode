@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Callable
 
 from sqlalchemy import delete as sa_delete
 from sqlalchemy.orm import Session
@@ -35,10 +36,12 @@ def index_document(
     *,
     embedder: Embedder | None = None,
     qindex: QdrantIndex | None = None,
+    on_stage: Callable[[str], None] | None = None,
 ) -> int:
     """Parse, chunk, persist, and index a document. Returns the chunk count.
 
-    Raises on failure (caller handles retry/FAILED status).
+    Raises on failure (caller handles retry/FAILED status). `on_stage` receives
+    "parsing" / "indexing" transitions for ingest-job progress (Phase 2).
     """
     if embedder is None:
         from app.retrieval.factory import get_embedder
@@ -55,9 +58,13 @@ def index_document(
     db.commit()
 
     try:
+        if on_stage is not None:
+            on_stage("parsing")
         data = storage.read_document(doc.id, doc.filename)
         chunks, page_count = run_pipeline(data, doc.file_type)
 
+        if on_stage is not None:
+            on_stage("indexing")
         qindex.ensure_collection()
         _clear_existing(db, qindex, doc.id)
 

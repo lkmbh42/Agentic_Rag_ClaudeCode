@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.rbac import can_access_collection
 from app.ingestion import filetype, storage
 from app.ingestion.hashing import content_hash
+from app.ingestion.jobs import create_job
 from app.ingestion.qdrant_index import QdrantIndex
 from app.models.document import Document
 from app.models.enums import AuditAction, DocumentStatus
@@ -73,10 +74,11 @@ async def create_document(
         resource_type="document", resource_id=str(doc.id),
         detail={"filename": filename, "file_type": file_type},
     )
+    job = await create_job(db, doc.id)
     await db.commit()
     await db.refresh(doc)
 
-    await enqueue_index(doc.id)
+    await enqueue_index(doc.id, job_id=job.id)
     return doc, False
 
 
@@ -84,9 +86,10 @@ async def reindex_document(db: AsyncSession, user: User, document_id: uuid.UUID)
     doc = await _get_accessible(db, user, document_id)
     doc.status = DocumentStatus.PENDING
     doc.error = None
+    job = await create_job(db, doc.id)
     await db.commit()
     await db.refresh(doc)
-    await enqueue_index(doc.id)
+    await enqueue_index(doc.id, job_id=job.id)
     return doc
 
 

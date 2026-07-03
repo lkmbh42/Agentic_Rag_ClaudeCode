@@ -22,8 +22,10 @@ import uuid
 from app.config import get_settings
 from app.db.sync_session import SyncSessionLocal
 from app.eval.runner import default_chat_fn, persist_eval, score_payload
+from app.ingestion import jobs
 from app.ingestion.indexer import index_document
 from app.ingestion.qdrant_index import QdrantIndex
+from app.models.enums import IngestStatus
 from app.observability.tracing import record_eval, setup_tracing
 from app.queue import enqueue_index_sync, sync_client
 from app.retrieval.factory import get_embedder
@@ -53,17 +55,33 @@ def _handle_job(payload: str, redis_client, embedder, qindex: QdrantIndex) -> No
     job = json.loads(payload)
     document_id = job["document_id"]
     attempt = int(job.get("attempt", 0))
-    try:
-        with SyncSessionLocal() as db:
-            count = index_document(db, uuid.UUID(document_id), embedder=embedder, qindex=qindex)
-        logger.info("indexed %s (%d chunks, attempt %d)", document_id, count, attempt)
-    except Exception as exc:  # noqa: BLE001
-        if attempt + 1 < _settings.max_indexing_retries:
-            logger.warning("index failed %s (attempt %d): %s — requeueing", document_id, attempt, exc)
-            enqueue_index_sync(redis_client, document_id, attempt + 1)
-        else:
-            logger.error("index permanently failed %s after %d attempts: %s",
-                         document_id, attempt + 1, exc)
+    with SyncSessionLocal() as db:
+        job_id = jobs.job_started(db, job.get("job_id"), document_id, attempt)
+
+        def _stage(name: str) -> None:
+            # Progress row + heartbeat: long stages must not stale the healthcheck.
+            _touch_heartbeat()
+            jobs.job_stage(db, job_id, IngestStatus(name))
+
+        try:
+            count = index_document(db, uuid.UUID(document_id), embedder=embedder,
+                                   qindex=qindex, on_stage=_stage)
+            jobs.job_finished(db, job_id)
+            logger.info("indexed %s (%d chunks, attempt %d)", document_id, count, attempt)
+        except Exception as exc:  # noqa: BLE001
+            will_retry = attempt + 1 < _settings.max_indexing_retries
+            jobs.job_finished(db, job_id, error=str(exc), requeued=will_retry)
+            if will_retry:
+                logger.warning("index failed %s (attempt %d): %s — requeueing",
+                               document_id, attempt, exc)
+                enqueue_index_sync(redis_client, document_id, attempt + 1,
+                                   job_id=str(job_id))
+            else:
+                logger.error("index permanently failed %s after %d attempts: %s — dead-lettered",
+                             document_id, attempt + 1, exc)
+                jobs.push_dlq(redis_client,
+                              {"document_id": document_id, "attempt": attempt,
+                               "job_id": str(job_id)}, str(exc))
 
 
 def _handle_eval(payload: str, chat_fn) -> None:
