@@ -29,6 +29,9 @@ redis==5.*
 # --- vector store client ---
 qdrant-client==1.12.*
 
+# --- object store client (MinIO, Phase 2: figures + page renders) ---
+minio==7.2.*
+
 # --- auth ---
 python-jose[cryptography]==3.3.*
 bcrypt>=4.1,<6          # used directly; passlib is unmaintained / breaks on bcrypt 5.x

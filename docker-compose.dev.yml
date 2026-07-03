@@ -76,6 +76,27 @@ services:
       retries: 5
       start_period: 40s
 
+  minio:
+    # Object store for figure crops + page renders (Phase 2). Same pinned digest
+    # as prod; dev additionally publishes the API/console ports for debugging.
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin-dev-only}
+      MINIO_KMS_SECRET_KEY: ${MINIO_KMS_SECRET_KEY:-minio-default-key:bXktZGV2LW9ubHktMzItYnl0ZS1rbXMta2V5LTEyMzQ=}
+      MINIO_KMS_AUTO_ENCRYPTION: "on"
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes: ["minio_data:/data"]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   # ----------------------------------------------------------------- inference
   # DEV-ONLY DEVIATION from Phase 1 DoD ("Ollama removed from compose"): the dev
   # host is CPU-only — the official vLLM image requires CUDA, so Ollama remains
@@ -148,6 +169,7 @@ services:
     depends_on:
       redis: {condition: service_healthy}
       postgres: {condition: service_healthy}
+      minio: {condition: service_healthy}
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import os,time,sys; p=os.environ.get('WORKER_HEARTBEAT_PATH','/tmp/worker_heartbeat'); sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p)<300 else 1)\""]
       interval: 15s
@@ -175,3 +197,4 @@ volumes:
   phoenix_data:
   ollama_data:
   documents_data:
+  minio_data:

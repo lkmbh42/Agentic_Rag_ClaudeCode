@@ -74,6 +74,14 @@ class Settings(BaseSettings):
     embeddings_backend: str = "hashing"
     reranker_backend: str = "lexical"
 
+    # --- object store (MinIO, Phase 2: figure crops + page renders) ---
+    minio_endpoint: str = "minio:9000"
+    minio_access_key: str = "minioadmin"
+    minio_secret_key: str = "minioadmin-dev-only"
+    minio_secure: bool = False  # internal Docker network; TLS terminates at proxy
+    minio_bucket_figures: str = "figures"
+    minio_bucket_pages: str = "pages"
+
     # --- VLM / visual path ---
     vlm_base_url: str = "http://vlm:8002"
     visual_path: str = "degraded"  # degraded | full
