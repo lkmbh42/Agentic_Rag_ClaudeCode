@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -19,6 +20,8 @@ class ChatRequest(BaseModel):
 
 class ChatTurnResponse(BaseModel):
     session_id: uuid.UUID
+    # Phase 4: id of the persisted assistant message — the feedback anchor.
+    message_id: uuid.UUID | None = None
     answer: str
     citations: list[dict] = []
     route: str | None = None
@@ -31,8 +34,15 @@ class ChatMessageOut(BaseModel):
     role: MessageRole
     content: str
     created_at: datetime
+    # Phase 4: the requesting user's own rating on this message, if any.
+    feedback: str | None = None
 
     model_config = {"from_attributes": True}
+
+
+class FeedbackRequest(BaseModel):
+    rating: Literal["up", "down"]
+    reason: str | None = Field(default=None, max_length=2000)
 
 
 class ChatSessionOut(BaseModel):

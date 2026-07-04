@@ -6,7 +6,7 @@ exhaustive.
 
 from app.db.base import Base
 from app.models.audit import AuditLog
-from app.models.chat import ChatMessage, ChatSession
+from app.models.chat import ChatMessage, ChatSession, MessageFeedback
 from app.models.chunk import DocumentChunk
 from app.models.collection import Collection
 from app.models.department import Department
@@ -21,6 +21,7 @@ __all__ = [
     "AuditLog",
     "ChatMessage",
     "ChatSession",
+    "MessageFeedback",
     "DocumentChunk",
     "Collection",
     "Department",

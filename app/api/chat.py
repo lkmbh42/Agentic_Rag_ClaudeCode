@@ -25,17 +25,19 @@ from app.core.ratelimit import rate_limit
 from app.core.rbac import accessible_collection_ids
 from app.db.session import get_db
 from app.llm.client import llm_available
-from app.models.chat import ChatMessage, ChatSession
+from app.models.chat import ChatMessage, ChatSession, MessageFeedback
 from app.models.enums import AuditAction, MessageRole
 from app.models.user import User
 from app.observability import metrics, tracing
 from app.services.audit import record_audit
 from app.schemas.chat import (
+    ChatMessageOut,
     ChatRequest,
     ChatSessionCreate,
     ChatSessionDetail,
     ChatSessionOut,
     ChatTurnResponse,
+    FeedbackRequest,
 )
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -110,7 +112,10 @@ async def chat(
     total_ms = (time.perf_counter() - t0) * 1000
 
     answer = result.get("answer", "")
-    db.add(ChatMessage(session_id=session.id, role=MessageRole.ASSISTANT, content=answer))
+    assistant_msg = ChatMessage(session_id=session.id, role=MessageRole.ASSISTANT,
+                                content=answer)
+    db.add(assistant_msg)
+    await db.flush()  # id needed in the response (feedback anchor, Phase 4)
     await record_audit(
         db, action=AuditAction.GENERATION, user_id=user.id,
         resource_type="chat_session", resource_id=str(session.id),
@@ -125,7 +130,7 @@ async def chat(
     tracing.record_request(result, total_ms, request_id, user.id)
 
     return ChatTurnResponse(
-        session_id=session.id, answer=answer,
+        session_id=session.id, message_id=assistant_msg.id, answer=answer,
         citations=result.get("citations", []), route=result.get("route"),
         cache_hit=result.get("cache_hit", False),
         insufficient=result.get("insufficient", False),
@@ -201,7 +206,10 @@ async def chat_stream(
 
         total_ms = (time.perf_counter() - t0) * 1000
         answer = final_state.get("answer", "")
-        db.add(ChatMessage(session_id=session_id, role=MessageRole.ASSISTANT, content=answer))
+        assistant_msg = ChatMessage(session_id=session_id, role=MessageRole.ASSISTANT,
+                                    content=answer)
+        db.add(assistant_msg)
+        await db.flush()
         await record_audit(
             db, action=AuditAction.GENERATION, user_id=user.id,
             resource_type="chat_session", resource_id=str(session_id),
@@ -213,7 +221,8 @@ async def chat_stream(
         metrics.record_cache(bool(final_state.get("cache_hit", False)))
         tracing.record_request(final_state, total_ms, request_id, user.id)
         yield {"event": "done", "data": json.dumps({
-            "session_id": str(session_id), "answer": answer,
+            "session_id": str(session_id), "message_id": str(assistant_msg.id),
+            "answer": answer,
             "citations": final_state.get("citations", []),
             "route": final_state.get("route"),
             "cache_hit": final_state.get("cache_hit", False),
@@ -262,9 +271,62 @@ async def get_session(
         .order_by(ChatMessage.created_at.asc())
     )
     messages = list(result.scalars().all())
+    # The requesting user's own ratings (Phase 4 feedback UI state).
+    fb: dict[uuid.UUID, str] = {}
+    if messages:
+        fb_rows = await db.execute(
+            select(MessageFeedback).where(
+                MessageFeedback.user_id == user.id,
+                MessageFeedback.message_id.in_([m.id for m in messages]),
+            )
+        )
+        fb = {f.message_id: f.rating for f in fb_rows.scalars()}
     return ChatSessionDetail(
         id=session.id,
         title=session.title,
         created_at=session.created_at,
-        messages=messages,
+        messages=[
+            ChatMessageOut(id=m.id, role=m.role, content=m.content,
+                           created_at=m.created_at, feedback=fb.get(m.id))
+            for m in messages
+        ],
     )
+
+
+@router.post("/messages/{message_id}/feedback", status_code=status.HTTP_204_NO_CONTENT)
+async def message_feedback(
+    message_id: uuid.UUID,
+    body: FeedbackRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """👍/👎 (+ optional reason) on an assistant message the caller owns.
+    Upsert per (message, user); persisted to Postgres for eval mining."""
+    msg = await db.get(ChatMessage, message_id)
+    if msg is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
+    session = await db.get(ChatSession, msg.session_id)
+    if session is None or session.user_id != user.id:
+        # 404, not 403 — never confirm another user's message ids.
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
+    if msg.role != MessageRole.ASSISTANT:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            "Feedback applies to assistant messages")
+
+    existing = (
+        await db.execute(
+            select(MessageFeedback).where(
+                MessageFeedback.message_id == message_id,
+                MessageFeedback.user_id == user.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        existing.rating, existing.reason = body.rating, body.reason
+    else:
+        db.add(MessageFeedback(message_id=message_id, user_id=user.id,
+                               rating=body.rating, reason=body.reason))
+    await db.commit()
+    from fastapi import Response
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

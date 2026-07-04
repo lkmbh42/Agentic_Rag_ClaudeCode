@@ -60,8 +60,8 @@ PSYCOPG_TEST_URL = (
 )
 
 _TABLES = [
-    "audit_logs", "chat_messages", "chat_sessions", "permissions",
-    "documents", "collections", "users", "departments",
+    "message_feedback", "audit_logs", "chat_messages", "chat_sessions",
+    "permissions", "documents", "collections", "users", "departments",
 ]
 
 # Known test passwords.
