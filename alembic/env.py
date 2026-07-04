@@ -21,7 +21,11 @@ from app.models import Base  # noqa: F401 - imports register all models
 
 config = context.config
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers defaults to True and would permanently silence
+    # every already-created app logger (e.g. rag.*) when migrations run
+    # in-process — the test harness does exactly that (surfaced by the Phase 3
+    # assembler test asserting its CRITICAL ACL log).
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 
