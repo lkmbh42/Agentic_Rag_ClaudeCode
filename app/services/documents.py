@@ -65,6 +65,7 @@ async def create_document(
         file_type=file_type,
         content_hash=digest,
         status=DocumentStatus.PENDING,
+        uploaded_by_id=user.id,
     )
     db.add(doc)
     await db.flush()

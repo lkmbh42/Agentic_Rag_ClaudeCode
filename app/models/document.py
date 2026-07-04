@@ -37,3 +37,11 @@ class Document(UUIDMixin, TimestampMixin, Base):
     )
     page_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Phase 3 metadata path: uploader ("author" facet of the spec's metadata
+    # intent). Nullable — pre-Phase-3 rows are backfilled from the audit log
+    # where an UPLOAD entry exists.
+    uploaded_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
