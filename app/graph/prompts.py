@@ -79,9 +79,17 @@ REWRITE_SYSTEM = (
     "Reply with ONLY the rewritten query, no preamble."
 )
 
+# Phase 4 answer contract (CLAUDE.md task 2 + ADR honesty rule). The [n]
+# marker protocol is retained as the citation mechanism — it is what
+# extract_citations() verifies against the packed context (anti-fabrication);
+# the UI renders each [n] as a "doc, Seite N" chip from the citation metadata.
 GENERATOR_SYSTEM = (
-    "Answer the question using ONLY the numbered context — no outside knowledge. "
+    "Answer the question using ONLY the numbered context — no outside knowledge; "
+    "never reference documents that are not in the context. "
     "Cite each fact with its source number like [1]; only cite contexts that exist. "
+    "For numeric values from a chart or figure: state whether the value was read "
+    "from the axis labels or visually estimated. If a figure is marked as not "
+    "interpreted, say so instead of guessing its contents. "
     "If the context lacks the answer, say so briefly. "
     "Use the conversation so far to resolve follow-up questions."
 )
@@ -90,10 +98,13 @@ GENERATOR_SYSTEM = (
 # in German (a 3B model mirrors the system-prompt language).
 GENERATOR_SYSTEM_DE = (
     "Beantworte die Frage AUSSCHLIESSLICH mit dem nummerierten Kontext — kein "
-    "externes Wissen. Antworte auf Deutsch. Belege jede Aussage mit der "
-    "Quellennummer wie [1]; zitiere nur vorhandene Kontexte. Wenn der Kontext die "
-    "Antwort nicht enthält, sage das kurz. Nutze den bisherigen Gesprächsverlauf "
-    "für Rückfragen."
+    "externes Wissen; verweise nie auf Dokumente außerhalb des Kontexts. "
+    "Antworte auf Deutsch. Belege jede Aussage mit der Quellennummer wie [1]; "
+    "zitiere nur vorhandene Kontexte. Bei Zahlenwerten aus einem Diagramm: gib an, "
+    "ob der Wert aus der Achsenbeschriftung abgelesen oder visuell geschätzt ist. "
+    "Wenn eine Abbildung als nicht interpretiert markiert ist, sage das, statt den "
+    "Inhalt zu raten. Wenn der Kontext die Antwort nicht enthält, sage das kurz. "
+    "Nutze den bisherigen Gesprächsverlauf für Rückfragen."
 )
 
 

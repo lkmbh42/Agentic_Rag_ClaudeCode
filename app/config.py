@@ -62,6 +62,12 @@ class Settings(BaseSettings):
     llm_gen_model: str = "qwen2.5:3b"
     llm_class_model: str = "qwen2.5:3b"
     llm_request_timeout_s: int = 120
+    # Phase 4: True ONLY when the served generation model accepts image content
+    # parts (a VL model). Gates query-time image context end-to-end: the
+    # assembler resolves page images and generate() attaches them. The ratified
+    # ADR keeps this FALSE on the 24 GB prod host (text 7B-AWQ; zero query-time
+    # VLM calls); flipping it is the documented ≥48 GB upgrade path.
+    llm_multimodal: bool = False
 
     # --- embeddings / reranker ---
     embeddings_base_url: str = "http://embeddings:8001"

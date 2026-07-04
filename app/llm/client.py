@@ -43,7 +43,8 @@ class LLMClient(Protocol):
     def rewrite_query(self, query: str) -> str: ...
     def generate(self, query: str, contexts: list[str],
                  on_token: Callable[[str], None] | None = None,
-                 history: list[dict] | None = None) -> str: ...
+                 history: list[dict] | None = None,
+                 images: list[str] | None = None) -> str: ...
     def grade_relevance(self, query: str, contexts: list[str]) -> bool: ...
     def grade_grounded(self, answer: str, contexts: list[str]) -> bool: ...
 
@@ -91,7 +92,21 @@ class OpenAILLM:
         )
         self.model = model or _settings.llm_gen_model
 
-    def _chat(self, system: str, user: str, max_tokens: int = 512) -> str:
+    @staticmethod
+    def _user_content(user: str, images: list[str] | None):
+        """OpenAI message content: plain string without images, content parts
+        with them (Phase 4, VL models only — gated by llm_multimodal upstream).
+        Images are base64 PNGs from the context assembler; the data-URL form is
+        what vLLM's OpenAI-compatible endpoint accepts for local VL serving."""
+        if not images:
+            return user
+        parts: list[dict] = [{"type": "text", "text": user}]
+        parts += [{"type": "image_url",
+                   "image_url": {"url": f"data:image/png;base64,{b64}"}}
+                  for b64 in images]
+        return parts
+
+    def _chat(self, system: str, user, max_tokens: int = 512) -> str:
         resp = self._client.chat.completions.create(
             model=self.model,
             messages=[{"role": "system", "content": system},
@@ -100,7 +115,7 @@ class OpenAILLM:
         )
         return (resp.choices[0].message.content or "").strip()
 
-    def _chat_stream(self, system: str, user: str,
+    def _chat_stream(self, system: str, user,
                      on_token: Callable[[str], None], max_tokens: int) -> str:
         stream = self._client.chat.completions.create(
             model=self.model,
@@ -153,9 +168,11 @@ class OpenAILLM:
 
     def generate(self, query: str, contexts: list[str],
                  on_token: Callable[[str], None] | None = None,
-                 history: list[dict] | None = None) -> str:
+                 history: list[dict] | None = None,
+                 images: list[str] | None = None) -> str:
         system = prompts.generator_system(query)
-        user = prompts.generator_user(query, contexts, history)
+        user = self._user_content(
+            prompts.generator_user(query, contexts, history), images)
         try:
             if on_token is not None:
                 return self._chat_stream(system, user, on_token, 700)

@@ -167,14 +167,14 @@ class Nodes:
     def generator(self, state: GraphState) -> dict:
         from app.context import assemble
 
-        # Phase 3: the assembler is the last gate — ACL re-check (defense in
-        # depth), hard token budget, fused ordering. `max_images=0` until the
-        # Phase 4 VLM contract can consume page images in the generate call;
-        # resolving MinIO objects to base64 for a text-only model would be
-        # wasted I/O every visual turn.
+        # The assembler is the last gate — ACL re-check (defense in depth),
+        # hard token budget, fused ordering. Page images are resolved to base64
+        # only when the served model can consume them (llm_multimodal, Phase 4);
+        # for a text-only model that would be dead MinIO I/O every visual turn.
         allowed = _uuids(state.get("allowed_collection_ids", []))
-        assembled = assemble(state.get("chunks", []), state.get("page_hits", []),
-                             allowed, max_images=0)
+        assembled = assemble(
+            state.get("chunks", []), state.get("page_hits", []), allowed,
+            max_images=_settings.context_max_images if _settings.llm_multimodal else 0)
 
         # In a custom-stream run, tokens flow to the SSE writer; otherwise no-op.
         writer = None
@@ -194,6 +194,7 @@ class Nodes:
             state["query"], assembled.blocks,
             on_token=writer if callable(writer) else None,
             history=history,
+            images=[img.b64 for img in assembled.images],
         )
         elapsed = (time.perf_counter() - t0) * 1000
         # Citations come ONLY from [n] markers the model actually wrote, mapped

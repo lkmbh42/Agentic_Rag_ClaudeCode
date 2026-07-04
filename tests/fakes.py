@@ -18,7 +18,8 @@ class FakeLLM:
     def plan(self, query): return [query]
     def rewrite_query(self, query): return query + " (rewritten)"
 
-    def generate(self, query, contexts, on_token=None, history=None):
+    def generate(self, query, contexts, on_token=None, history=None, images=None):
+        self.last_images = images  # inspected by Phase 4 wiring tests
         if on_token is not None:
             for word in self._answer.split(" "):
                 on_token(word + " ")
