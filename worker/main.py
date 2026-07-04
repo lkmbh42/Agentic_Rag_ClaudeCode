@@ -121,8 +121,20 @@ def main() -> None:
     _judge_chat_fn = None  # lazily built on first eval (avoids LLM client at boot)
     logger.info("worker starting, queues=[%s, %s]", _settings.ingest_queue, _settings.eval_queue)
 
+    last_cache_purge = 0.0
     while _running:
         _touch_heartbeat()
+        # Phase 3: sweep expired semantic-cache entries (AUDIT §11 eviction).
+        if time.time() - last_cache_purge >= _settings.semantic_cache_purge_interval_s:
+            last_cache_purge = time.time()
+            try:
+                from app.retrieval.semantic_cache import SemanticCache
+
+                purged = SemanticCache().purge_expired()
+                if purged:
+                    logger.info("purged %d expired semantic-cache entries", purged)
+            except Exception as exc:  # noqa: BLE001 - the sweep must never kill the worker
+                logger.warning("semantic-cache purge failed: %s", exc)
         try:
             item = redis_client.blpop([_settings.ingest_queue, _settings.eval_queue],
                                       timeout=BLOCK_TIMEOUT)
