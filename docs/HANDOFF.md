@@ -12,9 +12,9 @@ Last updated: 2026-07-04 (Phase 3 gate) · Branch: `feat/multimodal-migration` �
 
 1. `git log --oneline -15` and read `docs/CHANGELOG.md`.
 2. Confirm clean tree on `feat/multimodal-migration`.
-3. **Phase 2 APPROVED 2026-07-04.** **Phase 3 is CODE-COMPLETE and committed but
-   NOT approved.** Present the Phase 3 gate (section 4 below) and STOP. Do
-   **not** start Phase 4 until the operator writes exactly `PHASE 3 APPROVED`.
+3. **Phase 3 APPROVED 2026-07-04** (decisions 1–4 incl. GPU deferrals ratified).
+   **Phase 4 is in progress** — see section 6 and CLAUDE.md Phase 4 for scope;
+   check `git log` + `docs/CHANGELOG.md` for what is already done.
 4. Do not re-do finished work. Everything is committed; verify, don't rebuild.
 
 ---
@@ -50,8 +50,8 @@ Non-negotiable rules that keep biting if forgotten:
 | 0 — Audit & baseline | ✅ DONE, **APPROVED** 2026-07-02 | operator wrote PHASE 0 APPROVED |
 | 1 — Ollama→vLLM serving (text parity) | ✅ DONE, **APPROVED** 2026-07-03 | dev-Ollama hardware exception accepted |
 | 2 — Multimodal ingestion pipeline | ✅ DONE, **APPROVED** 2026-07-04 | operator wrote PHASE 2 APPROVED (decisions 1–3 + GPU deferrals ratified) |
-| 3 — Visual retrieval & fusion | ✅ **CODE-COMPLETE, awaiting gate** | **needs PHASE 3 APPROVED** |
-| 4 — VLM answering & frontend | ⏳ NEXT (do not start yet) | — |
+| 3 — Visual retrieval & fusion | ✅ DONE, **APPROVED** 2026-07-04 | operator wrote PHASE 3 APPROVED (decisions 1–4 + GPU deferrals ratified) |
+| 4 — VLM answering & frontend | 🔨 IN PROGRESS (started 2026-07-04) | — |
 | 5 — Scale, security & cutover | ⏳ | — |
 
 ---

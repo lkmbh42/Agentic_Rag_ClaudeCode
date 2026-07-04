@@ -1,6 +1,10 @@
 # CHANGELOG — Multimodal RAG Migration
 
-## Phase 3 — Visual retrieval & fusion (code-complete, awaiting gate, 2026-07-04)
+## Phase 3 — Visual retrieval & fusion (gate: "PHASE 3 APPROVED", 2026-07-04)
+
+> Gate ratified all four flagged decisions: (1) 4-intent taxonomy supersedes the
+> legacy router, (2) `documents.uploaded_by_id` schema extension, (3) strict
+> scope-hash cache keying, (4) GPU deferrals (visual hit@5, router p95).
 
 **Measured (dev host):** router accuracy **94.4%** on 72 labeled DE/EN queries
 (DoD ≥90% ✅; all 4 misses degrade to the safe `text` path;
