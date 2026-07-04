@@ -8,10 +8,13 @@ from app.retrieval.types import RetrievedChunk
 
 
 class FakeLLM:
-    def __init__(self, route="simple_rag", relevant=True, grounded=True, answer="Fake answer [1]."):
+    def __init__(self, route="simple_rag", relevant=True, grounded=True,
+                 answer="Fake answer [1].", intent="text"):
         self._route, self._relevant, self._grounded, self._answer = route, relevant, grounded, answer
+        self._intent = intent
 
     def route(self, query): return self._route
+    def route_intent(self, query): return self._intent
     def plan(self, query): return [query]
     def rewrite_query(self, query): return query + " (rewritten)"
 
@@ -35,6 +38,14 @@ class FakeRetriever:
             chunk_type="text", page_number=1, section_title=None, score=1.0,
             snippet="ctx", content=f"context about {query}",
         )]
+
+
+class FakeVisualRetriever:
+    def __init__(self, pages=None):
+        self._pages = pages or []
+
+    def search(self, allowed, query, top_k=None):
+        return self._pages if allowed else []
 
 
 class FakeCache:

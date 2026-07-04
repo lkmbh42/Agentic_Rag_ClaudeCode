@@ -19,7 +19,7 @@ from langgraph.graph import END, START, StateGraph
 from app.config import get_settings
 from app.llm.client import LLMClient
 from app.graph.nodes import Nodes
-from app.graph.state import COMPLEX_ROUTES, GraphState
+from app.graph.state import GraphState
 
 _settings = get_settings()
 _TERMINAL = "insufficient_answer"
@@ -40,12 +40,23 @@ def _after_cache(state: GraphState) -> str:
 def _after_router(state: GraphState) -> str:
     if _over_budget(state):
         return _TERMINAL
-    # Note: we deliberately do NOT dead-end on an "unsupported" classification —
-    # small models over-use it (esp. on follow-ups / non-English). Always try to
-    # answer from the documents; weak/irrelevant retrieval yields a safe reply.
-    if state.get("route") in COMPLEX_ROUTES:
+    # Phase 3 intents. There is no dead-end route: every intent ends in an
+    # attempt to answer from the documents (the old "unsupported" trap is gone —
+    # the 4-intent taxonomy has no such class and small models over-used it).
+    intent = state.get("intent", "text")
+    if intent == "multi_doc":
         return "planner"
+    if intent == "metadata":
+        return "metadata_lookup"
     return "retriever"
+
+
+def _after_metadata(state: GraphState) -> str:
+    if _over_budget(state):
+        return _TERMINAL
+    # Deterministic lookup hits skip the LLM relevance grader; nothing found →
+    # optional retrieval fallback (spec: "then optional retrieval").
+    return "generator" if state.get("chunks") else "retriever"
 
 
 def _after_grade(state: GraphState) -> str:
@@ -69,13 +80,17 @@ def _after_halluc(state: GraphState) -> str:
 
 
 def build_graph(llm: LLMClient, *, checkpointer=None, retriever=None, cache=None,
-                redis_client=None):
-    n = Nodes(llm, retriever=retriever, cache=cache, redis_client=redis_client)
+                redis_client=None, visual_retriever=None, intent_router=None,
+                session_factory=None):
+    n = Nodes(llm, retriever=retriever, cache=cache, redis_client=redis_client,
+              visual_retriever=visual_retriever, intent_router=intent_router,
+              session_factory=session_factory)
     g = StateGraph(GraphState)
 
     g.add_node("input_guard", n.input_guard)
     g.add_node("semantic_cache", n.semantic_cache)
     g.add_node("router", n.router)
+    g.add_node("metadata_lookup", n.metadata_lookup)
     g.add_node("planner", n.planner)
     g.add_node("retriever", n.retriever_node)
     g.add_node("retrieval_grader", n.retrieval_grader)
@@ -85,7 +100,6 @@ def build_graph(llm: LLMClient, *, checkpointer=None, retriever=None, cache=None
     g.add_node("retry_generation", n.retry_generation)
     g.add_node("finalize_answer", n.finalize_answer)
     g.add_node("cache_writer", n.cache_writer)
-    g.add_node("unsupported", n.unsupported)
     g.add_node(_TERMINAL, n.insufficient)
     g.add_node("eval_queue", n.eval_queue)
 
@@ -93,7 +107,9 @@ def build_graph(llm: LLMClient, *, checkpointer=None, retriever=None, cache=None
     g.add_conditional_edges("input_guard", _after_input, ["semantic_cache", "eval_queue"])
     g.add_conditional_edges("semantic_cache", _after_cache, ["router", "eval_queue"])
     g.add_conditional_edges("router", _after_router,
-                            ["planner", "retriever", "unsupported", _TERMINAL])
+                            ["planner", "retriever", "metadata_lookup", _TERMINAL])
+    g.add_conditional_edges("metadata_lookup", _after_metadata,
+                            ["generator", "retriever", _TERMINAL])
     g.add_edge("planner", "retriever")
     g.add_edge("retriever", "retrieval_grader")
     g.add_conditional_edges("retrieval_grader", _after_grade,
@@ -105,7 +121,6 @@ def build_graph(llm: LLMClient, *, checkpointer=None, retriever=None, cache=None
     g.add_edge("retry_generation", "generator")
     g.add_edge("finalize_answer", "cache_writer")
     g.add_edge("cache_writer", "eval_queue")
-    g.add_edge("unsupported", "eval_queue")
     g.add_edge(_TERMINAL, "eval_queue")
     g.add_edge("eval_queue", END)
 

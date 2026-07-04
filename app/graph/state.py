@@ -10,7 +10,10 @@ from __future__ import annotations
 import operator
 from typing import Annotated, TypedDict
 
-# Router categories (constrained set; ADR: structured JSON in prod).
+# LEGACY router categories (pre-Phase-3). Superseded by the 4-intent router
+# (app/router/, CLAUDE.md Phase 3): text | visual | metadata | multi_doc.
+# Kept only because LLMClient.route() still exists for rollback; the graph no
+# longer consumes these.
 ROUTES = {
     "simple_rag", "complex_multi_step", "summarization", "comparison",
     "table_question", "chart_question", "diagram_question", "image_question",
@@ -35,14 +38,22 @@ class GraphState(TypedDict, total=False):
     # observability (set by nodes)
     retrieval_latency_ms: float
     generation_latency_ms: float
+    router_latency_ms: float
 
     # working state
     rewritten_query: str
-    route: str
+    route: str  # exposed to API/audit; carries the intent since Phase 3
+    intent: str  # text | visual | metadata | multi_doc (app/router/)
+    intent_source: str  # "llm" | "fallback"
     plan: list[str]
     chunks: list[dict]
+    page_hits: list[dict]  # visual intent: ColQwen2 page hits (Phase 3)
     answer: str
     citations: list[dict]
+
+    # context assembly (Phase 3)
+    context_tokens: int
+    context_images: int
 
     # flags
     cache_hit: bool

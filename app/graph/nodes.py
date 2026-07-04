@@ -14,9 +14,11 @@ import redis as sync_redis
 from app.config import get_settings
 from app.graph.citations import extract_citations
 from app.llm.client import LLMClient
-from app.graph.state import COMPLEX_ROUTES, INSUFFICIENT_ANSWER, GraphState
+from app.graph.state import INSUFFICIENT_ANSWER, GraphState
 from app.retrieval.retriever import Retriever
 from app.retrieval.semantic_cache import SemanticCache
+from app.retrieval.visual import VisualRetriever
+from app.router import IntentRouter
 
 logger = logging.getLogger("rag.graph.nodes")
 _settings = get_settings()
@@ -43,11 +45,25 @@ class Nodes:
         retriever: Retriever | None = None,
         cache: SemanticCache | None = None,
         redis_client=None,
+        visual_retriever: VisualRetriever | None = None,
+        intent_router: IntentRouter | None = None,
+        session_factory=None,
     ) -> None:
         self.llm = llm
         self.retriever = retriever or Retriever()
         self.cache = cache or SemanticCache()
         self.redis = redis_client or sync_redis.from_url(_settings.redis_url, decode_responses=True)
+        self.visual = visual_retriever or VisualRetriever()
+        # Default: route with the SAME injected client (deterministic in tests).
+        # The prod runtime injects IntentRouter() so routing stays on the small
+        # classification model (Qwen2.5-3B role) — see app/graph/runtime.py.
+        self.intent_router = intent_router or IntentRouter(llm=llm)
+        # Sync DB sessions for the metadata path (the graph runs off-loop).
+        if session_factory is None:
+            from app.db.sync_session import SyncSessionLocal
+
+            session_factory = SyncSessionLocal
+        self.session_factory = session_factory
 
     # ------------------------------------------------------------------ nodes
     def input_guard(self, state: GraphState) -> dict:
@@ -71,7 +87,31 @@ class Nodes:
         return {"iterations": _bump(state), "cache_hit": False}
 
     def router(self, state: GraphState) -> dict:
-        return {"iterations": _bump(state), "route": self.llm.route(state["query"])}
+        """Phase 3 intent router (text|visual|metadata|multi_doc). `route` is
+        kept in lock-step with `intent` for the API/audit surface."""
+        decision = self.intent_router.classify(state["query"])
+        return {
+            "iterations": _bump(state),
+            "intent": decision.intent,
+            "intent_source": decision.source,
+            "router_latency_ms": decision.latency_ms,
+            "route": decision.intent,
+        }
+
+    def metadata_lookup(self, state: GraphState) -> dict:
+        """`metadata` intent: ACL-scoped Postgres lookup. Hits become normal
+        context chunks; no hits → the graph falls back to retrieval."""
+        from app.retrieval.metadata_lookup import lookup_documents
+
+        allowed = _uuids(state.get("allowed_collection_ids", []))
+        chunks: list[dict] = []
+        if allowed:
+            try:
+                with self.session_factory() as session:
+                    chunks = lookup_documents(session, allowed, state["query"])
+            except Exception as exc:  # noqa: BLE001 - degrade to retrieval
+                logger.warning("metadata lookup failed: %s", exc)
+        return {"iterations": _bump(state), "chunks": chunks}
 
     def planner(self, state: GraphState) -> dict:
         return {"iterations": _bump(state), "plan": self.llm.plan(state["query"])}
@@ -88,14 +128,26 @@ class Nodes:
                 query = f"{prior[-1]} {query}"
         t0 = time.perf_counter()
         chunks = self.retriever.search(allowed, query) if allowed else []
+        # Visual intent: ColQwen2 page retrieval runs ALONGSIDE the text-hybrid
+        # search (spec: per-intent fusion). Degrades to [] without a GPU host.
+        page_hits: list[dict] = []
+        if state.get("intent") == "visual" and allowed:
+            page_hits = [
+                {"point_id": str(p.point_id), "document_id": str(p.document_id),
+                 "collection_id": str(p.collection_id), "page_number": p.page_number,
+                 "image_uri": p.image_uri, "file_name": p.file_name,
+                 "score": p.score}
+                for p in self.visual.search(allowed, query)
+            ]
         elapsed = (time.perf_counter() - t0) * 1000
         return {"iterations": _bump(state),
                 "retrieval_latency_ms": elapsed,
+                "page_hits": page_hits,
                 "chunks": [
             {"chunk_id": str(c.chunk_id), "document_id": str(c.document_id),
              "collection_id": str(c.collection_id), "chunk_type": c.chunk_type,
              "page_number": c.page_number, "section_title": c.section_title,
-             "content": c.content, "score": c.score}
+             "content": c.content, "score": c.score, "file_name": c.file_name}
             for c in chunks
         ]}
 
@@ -113,7 +165,17 @@ class Nodes:
         }
 
     def generator(self, state: GraphState) -> dict:
-        chunks = state.get("chunks", [])
+        from app.context import assemble
+
+        # Phase 3: the assembler is the last gate — ACL re-check (defense in
+        # depth), hard token budget, fused ordering. `max_images=0` until the
+        # Phase 4 VLM contract can consume page images in the generate call;
+        # resolving MinIO objects to base64 for a text-only model would be
+        # wasted I/O every visual turn.
+        allowed = _uuids(state.get("allowed_collection_ids", []))
+        assembled = assemble(state.get("chunks", []), state.get("page_hits", []),
+                             allowed, max_images=0)
+
         # In a custom-stream run, tokens flow to the SSE writer; otherwise no-op.
         writer = None
         try:
@@ -129,15 +191,18 @@ class Nodes:
                    if m.get("role") in ("user", "assistant")][:-1]
         t0 = time.perf_counter()
         answer = self.llm.generate(
-            state["query"], [c["content"] for c in chunks],
+            state["query"], assembled.blocks,
             on_token=writer if callable(writer) else None,
             history=history,
         )
         elapsed = (time.perf_counter() - t0) * 1000
-        # Citations come ONLY from [n] markers the model actually wrote.
-        citations = extract_citations(answer, chunks)
+        # Citations come ONLY from [n] markers the model actually wrote, mapped
+        # against the exact packed context (not the raw retrieval set).
+        citations = extract_citations(answer, assembled.packed_chunks)
         return {"iterations": _bump(state), "answer": answer,
-                "citations": citations, "generation_latency_ms": elapsed}
+                "citations": citations, "generation_latency_ms": elapsed,
+                "context_tokens": assembled.token_count,
+                "context_images": len(assembled.images)}
 
     def hallucination_grader(self, state: GraphState) -> dict:
         answer = (state.get("answer") or "").strip()
@@ -159,11 +224,6 @@ class Nodes:
                 "answer": INSUFFICIENT_ANSWER, "citations": [],
                 "messages": [{"role": "assistant", "content": INSUFFICIENT_ANSWER}]}
 
-    def unsupported(self, state: GraphState) -> dict:
-        msg = "That request type isn't supported."
-        return {"iterations": _bump(state), "insufficient": True, "answer": msg,
-                "messages": [{"role": "assistant", "content": msg}]}
-
     def finalize_answer(self, state: GraphState) -> dict:
         # Grounded answer accepted; record assistant message.
         return {"iterations": _bump(state),
@@ -177,6 +237,9 @@ class Nodes:
                     state["query"], state["answer"],
                     {uuid.UUID(c["collection_id"]) for c in chunks},
                     {uuid.UUID(c["document_id"]) for c in chunks},
+                    # Permission component of the cache key (Phase 3): the
+                    # asker's FULL scope, not just the answer's sources.
+                    requester_scope=_uuids(state.get("allowed_collection_ids", [])),
                 )
             except Exception as exc:  # noqa: BLE001
                 logger.warning("cache write failed: %s", exc)

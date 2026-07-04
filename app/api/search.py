@@ -18,10 +18,17 @@ from app.core.rbac import accessible_collection_ids
 from app.db.session import get_db
 from app.models.user import User
 from app.retrieval.retriever import Retriever
-from app.schemas.search import RetrievedChunkOut, SearchRequest, SearchResponse
+from app.retrieval.visual import VisualRetriever
+from app.schemas.search import (
+    RetrievedChunkOut,
+    RetrievedPageOut,
+    SearchRequest,
+    SearchResponse,
+)
 
 router = APIRouter(prefix="/search", tags=["retrieval"])
 _retriever = Retriever()
+_visual = VisualRetriever()
 
 
 @router.post("", response_model=SearchResponse)
@@ -34,9 +41,19 @@ async def search(
     results = await asyncio.to_thread(
         _retriever.search, allowed, body.query, body.top_k, body.top_n
     )
+    pages = []
+    if body.include_pages:
+        pages = await asyncio.to_thread(_visual.search, allowed, body.query)
     return SearchResponse(
         query=body.query,
         count=len(results),
+        pages=[
+            RetrievedPageOut(
+                document_id=p.document_id, collection_id=p.collection_id,
+                page_number=p.page_number, file_name=p.file_name, score=p.score,
+            )
+            for p in pages
+        ],
         results=[
             RetrievedChunkOut(
                 chunk_id=r.chunk_id, document_id=r.document_id,
