@@ -1,5 +1,55 @@
 # CHANGELOG — Multimodal RAG Migration
 
+## Phase 4 — VLM answering & frontend (code-complete, awaiting gate, 2026-07-04)
+
+**Measured (dev host, text subset, 100 cases, judge on, 0 errors —
+`eval/reports/phase4_text.md`):** judge correctness **43.9%** ≥ 42.1% baseline ✅
+(45.4% Phase 1 — within the documented judge-noise band); pass rate **68.0%** =
+Phase 1; hit@5 **75.0%** ≥ 73.9%; citation→correct-doc **72.8%** (71.7% Phase 1).
+Citation-present dipped 95%→**87%**: the 13 no-citation answers are dev-3B
+soft-refusals phrased outside the canonical insufficient markers (which rightly
+cite nothing) or prose-cited terse answers — instruction load from the richer
+contract on a 3B; the mechanism is intact and the prod-model parity gate
+re-measures it. Full suite: 164 fast + 13 docling + 1 llm gate green;
+`tsc --noEmit` clean; 3 concurrent SSE streams verified live.
+**GPU-deferred (flagged):** visual correctness ≥70%, 20-stream stability,
+prod-model text parity, sampled citation accuracy ≥90%.
+
+- **Serving decision surfaced, not silently resolved (task 1):** CLAUDE.md says swap
+  serving to Qwen2.5-VL-32B-Instruct-AWQ; the ratified ADR VRAM budget (§0.5) proves it
+  cannot fit the 24 GB prod host and §0.3 mandates zero query-time VLM calls there. Prod
+  compose keeps the **ADR default** (text 7B-AWQ, `LLM_MULTIMODAL=false`; visual questions
+  answer from pre-computed figure captions), and the **VL-32B configuration is a documented
+  `.env` overlay for ≥48 GB** (PINS.md Phase 4 table; `LLM_GEN/CLASS_MODEL` env-overridable
+  for the two-vLLM topology). Text-parity gate before go-live is a GPU-host step either way.
+  **Operator ratifies the active configuration at the gate.**
+- **Multimodal generate + answer contract (tasks 1b/2):** `llm_multimodal` gates
+  query-time image context end-to-end — the assembler resolves ≤4 page images to base64
+  and `generate()` attaches them as OpenAI content parts (data URLs; streaming included).
+  Answer contract (DE/EN system prompts, CI-pinned by `tests/test_answer_contract.py`):
+  context-only, never reference outside documents, `[n]` citations (machine-verified
+  protocol retained — **decision to ratify:** the spec's "[doc, Seite N]" is rendered by
+  the UI from citation metadata, not free-typed by the model, keeping the anti-fabrication
+  guard), read-vs-estimated chart-value qualifier ("aus der Achsenbeschriftung abgelesen"
+  vs "visuell geschätzt"), ADR honesty rule for uninterpreted figures, refusal escape hatch.
+- **ACL-checked media endpoints (task 4a):** `GET /media/pages/{doc}/{page}` +
+  `/media/figures/{doc}/{figure_id}` — gateway-proxied MinIO, JWT + collection-ACL
+  enforced (404, never 403; probe shapes rejected), `Cache-Control: private`; MinIO stays
+  internal-only, no presigned/public URLs (spec). CI security tests: 401 / cross-scope
+  404 / probe 404 / authorized 200 (DoD).
+- **Frontend (task 4b):** citation chips render `[n] file.pdf · Seite N` (file_name +
+  image_uri now propagate retriever→graph→citations) and toggle inline source previews —
+  figure crops and page renders fetched as authenticated blob URLs through /media
+  (degraded dev visual path hides quietly). 👍/👎 + reason (FeedbackBar) posts to the new
+  feedback endpoint and reflects stored ratings on session reload. `tsc --noEmit` clean.
+- **Feedback persistence (task 4b):** `message_feedback` table (migration `a81f5c9e3b02`,
+  one row per message+user, upsert, CASCADE), `POST /chat/messages/{id}/feedback`
+  (ownership-enforced), `message_id` returned by both chat endpoints, session detail
+  carries the caller's rating. Mined for eval (Phase 5 pilot feedback loop).
+- **Streaming (task 3):** SSE path unchanged and verified live with 3 concurrent streams
+  on the dev CPU (tokens + done events with message_id; routes correct). The 20-concurrent
+  stability DoD is a GPU-host measurement (flagged, same shape as prior latency gates).
+
 ## Phase 3 — Visual retrieval & fusion (gate: "PHASE 3 APPROVED", 2026-07-04)
 
 > Gate ratified all four flagged decisions: (1) 4-intent taxonomy supersedes the
