@@ -72,6 +72,17 @@ class ColQwenClient:
         resp.raise_for_status()
         return resp.json()["multivector"]
 
+    def embed_query(self, query: str) -> list[list[float]]:
+        """Return the per-token multivector for a QUERY (Phase 3 visual
+        retrieval). Raises on failure — the retriever degrades to []."""
+        resp = httpx.post(
+            f"{self.base_url}/embed_query",
+            json={"query": query},
+            timeout=_settings.colqwen_timeout_s,
+        )
+        resp.raise_for_status()
+        return resp.json()["multivector"]
+
 
 @lru_cache
 def get_colqwen() -> ColQwenClient:
