@@ -188,9 +188,13 @@ class Backend:
             )
         return r.json()
 
-    def search(self, query: str, top_k: int = 5) -> list[dict[str, Any]]:
-        r = self.request("POST", "/search", json={"query": query, "top_k": top_k, "top_n": top_k})
-        return r.json()["results"]
+    def search(self, query: str, top_k: int = 5,
+               include_pages: bool = False) -> dict[str, Any]:
+        r = self.request("POST", "/search", json={
+            "query": query, "top_k": top_k, "top_n": top_k,
+            "include_pages": include_pages,
+        })
+        return r.json()
 
     def chat(self, message: str) -> dict[str, Any]:
         return self.request("POST", "/chat", json={"message": message}).json()
@@ -303,7 +307,7 @@ def run(args: argparse.Namespace) -> int:
                  f"(run with --upload-dir eval/fixtures/corpus)")
 
     judge = None
-    if not args.no_judge:
+    if not args.no_judge and not args.retrieval_only:
         judge = Judge(args.judge_url, args.judge_model, args.judge_api_key, args.timeout)
 
     agg = Aggregate()
@@ -312,35 +316,54 @@ def run(args: argparse.Namespace) -> int:
         targets = case["retrieval_targets"]
         target_docs = {doc_by_file[t["file"]] for t in targets if t["file"] in doc_by_file}
 
+        # Phase 3: visual questions also score the ColQwen2 page path
+        # (docs_pages via /search include_pages). Empty pages (degraded dev
+        # visual path) score as a miss — the GPU host is where the 75% DoD
+        # target is measured.
+        visual_case = case["modality"] in ("chart", "diagram", "scanned", "table")
         row: dict[str, Any] = {
             "id": case["id"], "lang": case["lang"], "modality": case["modality"],
             "hit@1": None, "hit@3": None, "hit@5": None, "page_hit@5": None,
+            "visual_hit@5": None,
             "error": None,
         }
         try:
             if targets:
-                results = backend.search(case["query"], top_k=5)
+                payload = backend.search(case["query"], top_k=5,
+                                         include_pages=visual_case)
+                results = payload["results"]
                 ids = [str(r["document_id"]) for r in results]
                 row["hit@1"] = hit_at_k(ids, target_docs, 1)
                 row["hit@3"] = hit_at_k(ids, target_docs, 3)
                 row["hit@5"] = hit_at_k(ids, target_docs, 5)
                 row["page_hit@5"] = page_hit_at_k(results, targets, doc_by_file, 5)
+                if visual_case:
+                    row["visual_hit@5"] = page_hit_at_k(
+                        payload.get("pages", []), targets, doc_by_file, 5)
 
-            turn = backend.chat(case["query"])
-            answer = turn.get("answer", "")
-            citations = turn.get("citations", [])
-            row.update({
-                "insufficient": is_insufficient(answer, turn.get("insufficient", False)),
-                "contains_pass": contains_pass(answer, case["expect_contains"]),
-                "citations_present": bool(citations),
-                "citation_ok": citation_ok(citations, target_docs) if targets else None,
-                "route": turn.get("route"), "cache_hit": turn.get("cache_hit", False),
-                "answer": answer[:400],
-            })
-            row["passed"] = case_passed(case, row)
-            if judge is not None and not case["expect_insufficient"]:
-                row["judge_correctness"] = judge.correctness(
-                    case["query"], case["expected_answer"], answer)
+            if args.retrieval_only:
+                row.update({
+                    "insufficient": None, "contains_pass": None,
+                    "citations_present": None, "citation_ok": None,
+                    "route": None, "cache_hit": None, "answer": "",
+                    "passed": None,
+                })
+            else:
+                turn = backend.chat(case["query"])
+                answer = turn.get("answer", "")
+                citations = turn.get("citations", [])
+                row.update({
+                    "insufficient": is_insufficient(answer, turn.get("insufficient", False)),
+                    "contains_pass": contains_pass(answer, case["expect_contains"]),
+                    "citations_present": bool(citations),
+                    "citation_ok": citation_ok(citations, target_docs) if targets else None,
+                    "route": turn.get("route"), "cache_hit": turn.get("cache_hit", False),
+                    "answer": answer[:400],
+                })
+                row["passed"] = case_passed(case, row)
+                if judge is not None and not case["expect_insufficient"]:
+                    row["judge_correctness"] = judge.correctness(
+                        case["query"], case["expected_answer"], answer)
         except (CaseTimeout, httpx.HTTPStatusError) as exc:
             # A timed-out or errored turn is a FAILED case, not an aborted run.
             row.update({
@@ -350,7 +373,7 @@ def run(args: argparse.Namespace) -> int:
                 "answer": "", "passed": False, "error": str(exc),
             })
         agg.rows.append(row)
-        mark = "PASS" if row["passed"] else "fail"
+        mark = "—" if row["passed"] is None else ("PASS" if row["passed"] else "fail")
         err = f" error={row['error']}" if row["error"] else ""
         print(f"[{i:3}/{len(cases)}] {case['id']} {mark} "
               f"hit@5={row['hit@5']} route={row['route']}{err}", flush=True)
@@ -390,6 +413,7 @@ def render_report(agg: Aggregate, args: argparse.Namespace, elapsed: float,
         f"| retrieval hit@3 | {pct(agg.rate('hit@3'))} |",
         f"| retrieval hit@5 | {pct(agg.rate('hit@5'))} |",
         f"| page hit@5 | {pct(agg.rate('page_hit@5'))} |",
+        f"| visual (ColQwen2) hit@5 | {pct(agg.rate('visual_hit@5'))} |",
         f"| citation present | {pct(agg.rate('citations_present'))} |",
         f"| citation → correct doc | {pct(agg.rate('citation_ok'))} |",
         f"| timeouts/errors | {sum(1 for r in agg.rows if r.get('error'))} |",
@@ -442,6 +466,10 @@ def main() -> int:
                     help="client timeout; keep above the backend's "
                          "MAX_REQUEST_DURATION_S so the server 504s first")
     ap.add_argument("--no-judge", action="store_true")
+    ap.add_argument("--retrieval-only", action="store_true",
+                    help="score only the retrieval metrics (/search, incl. the "
+                         "visual page path) — no /chat, no judge. Fast; used "
+                         "for the Phase 3 hit@5 gates.")
     ap.add_argument("--judge-url", default="http://localhost:11434/v1",
                     help="OpenAI-compatible endpoint for the judge model")
     ap.add_argument("--judge-model", default="qwen2.5:3b")
