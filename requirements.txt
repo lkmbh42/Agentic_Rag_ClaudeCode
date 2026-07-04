@@ -44,9 +44,13 @@ python-jose[cryptography]==3.3.*
 bcrypt>=4.1,<6          # used directly; passlib is unmaintained / breaks on bcrypt 5.x
 
 # --- LLM client (OpenAI-compatible: works against both Ollama and vLLM) ---
-openai==1.54.*
-# 0.28: docling 2.108 requires >=0.28; openai 1.54 accepts <1. The 0.27→0.28
-# break (Request/Response content= keyword) does not touch our call sites.
+# 1.58: openai <1.55.3 passes the removed `proxies=` kwarg to httpx 0.28 and
+# crashes at client construction (surfaced by the Phase 3 router accuracy test —
+# graph tests use FakeLLM, so Phase 2 missed it). Must stay >=1.55.3 while
+# httpx is 0.28.
+openai==1.58.*
+# 0.28: docling 2.108 requires >=0.28; the 0.27→0.28 break (Request/Response
+# content= keyword) does not touch our call sites.
 httpx==0.28.*
 
 # --- resilience / ops ---
