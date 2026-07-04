@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { api, ApiError, getToken, setToken } from "./api";
+import { api, ApiError, citationMediaPath, getToken, setToken } from "./api";
 
 type AdminView =
   | "dashboard" | "users" | "departments" | "collections"
@@ -392,6 +392,77 @@ function Audit() {
 }
 
 // ----- Chat app (ChatGPT/Claude-style: conversations on the left) ------------
+// ----- Phase 4 chat widgets --------------------------------------------------
+
+/** Citation chip: "[n] file.pdf · Seite N". Clicking toggles the source
+ *  thumbnail (figure crop or page render) fetched through the ACL-checked
+ *  /media endpoints. No image (degraded visual path) -> chip only. */
+function CitationChip({ c }: { c: any }) {
+  const [open, setOpen] = useState(false);
+  const label = `${c.file_name || c.chunk_type || "source"}${c.page_number ? ` · Seite ${c.page_number}` : ""}`;
+  const mediaPath = citationMediaPath(c);
+  return (
+    <span className="cite-wrap">
+      <button type="button" className={`chip ${mediaPath ? "linky" : ""}`}
+        title={c.document_id} onClick={() => mediaPath && setOpen(!open)}>
+        [{c.marker}] {label}
+      </button>
+      {open && mediaPath && <AuthThumb path={mediaPath} alt={label} />}
+    </span>
+  );
+}
+
+/** <img> that fetches through the JWT-authenticated API (a plain src can't
+ *  carry the bearer token). Missing images hide themselves — never an error. */
+function AuthThumb({ path, alt }: { path: string; alt: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let revoke: string | null = null;
+    api.fetchImage(path).then((u) => {
+      if (u) { revoke = u; setUrl(u); } else setFailed(true);
+    });
+    return () => { if (revoke) URL.revokeObjectURL(revoke); };
+  }, [path]);
+  if (failed) return <span className="muted thumb-missing">no preview available</span>;
+  if (!url) return <span className="muted thumb-missing">loading preview…</span>;
+  return <img className="cite-thumb" src={url} alt={alt} />;
+}
+
+/** 👍/👎 with an optional reason on 👎, persisted per (message, user). */
+function FeedbackBar({ messageId, initial }: { messageId: string; initial?: string | null }) {
+  const [rating, setRating] = useState<string | null>(initial ?? null);
+  const [askReason, setAskReason] = useState(false);
+  const [reason, setReason] = useState("");
+  const [err, setErr] = useState("");
+
+  async function send(r: "up" | "down", why?: string) {
+    setErr("");
+    try {
+      await api.sendFeedback(messageId, r, why);
+      setRating(r);
+      setAskReason(false);
+    } catch (e: any) { setErr(e.message); }
+  }
+
+  return (
+    <div className="feedback">
+      <button type="button" className={`fb ${rating === "up" ? "on" : ""}`}
+        title="Helpful" onClick={() => send("up")}>👍</button>
+      <button type="button" className={`fb ${rating === "down" ? "on" : ""}`}
+        title="Not helpful" onClick={() => setAskReason(!askReason)}>👎</button>
+      {askReason && (
+        <span className="fb-reason">
+          <input value={reason} placeholder="What was wrong? (optional)"
+            onChange={(e) => setReason(e.target.value)} />
+          <button type="button" onClick={() => send("down", reason.trim() || undefined)}>Send</button>
+        </span>
+      )}
+      {err && <span className="muted"> {err}</span>}
+    </div>
+  );
+}
+
 function ChatApp({ email, isAdmin, onAdmin, onLogout }: {
   email: string; isAdmin: boolean; onAdmin: () => void; onLogout: () => void;
 }) {
@@ -414,7 +485,9 @@ function ChatApp({ email, isAdmin, onAdmin, onLogout }: {
     setSid(id); setError("");
     try {
       const s = await api.chatSession(id);
-      setMessages((s.messages || []).map((m: any) => ({ role: m.role, content: m.content })));
+      setMessages((s.messages || []).map((m: any) => ({
+        role: m.role, content: m.content, message_id: m.id, feedback: m.feedback,
+      })));
     } catch (e: any) { setError(e.message); }
   }
   function newChat() { setSid(null); setMessages([]); setError(""); }
@@ -432,6 +505,7 @@ function ChatApp({ email, isAdmin, onAdmin, onLogout }: {
         setMessages((m) => [...m, {
           role: "assistant", content: p.answer || acc, citations: p.citations,
           route: p.route, cache_hit: p.cache_hit, insufficient: p.insufficient,
+          message_id: p.message_id,
         }]);
         setStreaming(""); setBusy(false);
         if (!sid && p.session_id) { setSid(p.session_id); loadSessions(); }
@@ -480,9 +554,7 @@ function ChatApp({ email, isAdmin, onAdmin, onLogout }: {
               {m.role === "assistant" && m.citations && m.citations.length > 0 && (
                 <div className="cites">
                   {m.citations.map((c: any, j: number) => (
-                    <span className="chip" key={j} title={c.document_id}>
-                      [{c.marker}] {c.chunk_type}{c.page_number ? ` · p${c.page_number}` : ""}
-                    </span>
+                    <CitationChip c={c} key={j} />
                   ))}
                 </div>
               )}
@@ -491,6 +563,9 @@ function ChatApp({ email, isAdmin, onAdmin, onLogout }: {
                   {m.cache_hit ? "⚡ cached" : `route: ${m.route ?? "—"}`}
                   {m.insufficient ? " · no supporting evidence" : ""}
                 </div>
+              )}
+              {m.role === "assistant" && m.message_id && (
+                <FeedbackBar messageId={m.message_id} initial={m.feedback} />
               )}
             </div>
           ))}

@@ -137,7 +137,35 @@ export const api = {
   deleteDocument: (id: string) => req(`/documents/${id}`, { method: "DELETE" }),
   ingestStatus: (id: string) =>
     req<IngestJob | null>(`/documents/${id}/ingest-status`),
+  // Phase 4: feedback + ACL-checked media (thumbnails)
+  sendFeedback: (messageId: string, rating: "up" | "down", reason?: string) =>
+    req(`/chat/messages/${messageId}/feedback`, {
+      method: "POST",
+      body: JSON.stringify({ rating, reason: reason || undefined }),
+    }),
+  // Images need the bearer token, so <img src> can't hit the API directly —
+  // fetch with auth and hand back an object URL (caller revokes it).
+  async fetchImage(path: string): Promise<string | null> {
+    const token = getToken();
+    const res = await fetch(`${BASE}${path}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) return null; // degraded visual path / no image: hide quietly
+    return URL.createObjectURL(await res.blob());
+  },
 };
+
+// Media paths for a citation (Phase 4). Figure chunks carry their MinIO crop
+// as `image_uri` (s3://figures/{doc}/{figure}.png); anything with a page
+// number can show the page render when the page pipeline produced one.
+export function citationMediaPath(c: {
+  document_id: string; page_number?: number | null; image_uri?: string | null;
+}): string | null {
+  const m = (c.image_uri || "").match(/^s3:\/\/([^/]+)\/([^/]+)\/(.+)\.png$/);
+  if (m && m[1] === "figures") return `/media/figures/${m[2]}/${m[3]}`;
+  if (c.page_number) return `/media/pages/${c.document_id}/${c.page_number}`;
+  return null;
+}
 
 export type IngestJob = {
   status: "queued" | "parsing" | "captioning" | "indexing" | "indexed" | "failed";

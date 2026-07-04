@@ -16,3 +16,6 @@ class RetrievedChunk:
     snippet: str
     content: str
     file_name: str | None = None
+    # Phase 4: figure chunks carry their MinIO crop; the UI renders it as a
+    # citation thumbnail via the ACL-checked /media endpoints.
+    image_uri: str | None = None

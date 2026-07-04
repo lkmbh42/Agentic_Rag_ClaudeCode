@@ -147,7 +147,8 @@ class Nodes:
             {"chunk_id": str(c.chunk_id), "document_id": str(c.document_id),
              "collection_id": str(c.collection_id), "chunk_type": c.chunk_type,
              "page_number": c.page_number, "section_title": c.section_title,
-             "content": c.content, "score": c.score, "file_name": c.file_name}
+             "content": c.content, "score": c.score, "file_name": c.file_name,
+             "image_uri": c.image_uri}
             for c in chunks
         ]}
 

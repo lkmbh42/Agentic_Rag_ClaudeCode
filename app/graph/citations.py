@@ -32,5 +32,8 @@ def extract_citations(answer: str, chunks: list[dict]) -> list[dict]:
                 "page_number": c.get("page_number"),
                 "chunk_type": c.get("chunk_type"),
                 "file_name": c.get("file_name"),
+                # Phase 4: lets the UI render a figure-crop thumbnail through
+                # the ACL-checked /media endpoint (None for plain text chunks).
+                "image_uri": c.get("image_uri"),
             })
     return citations

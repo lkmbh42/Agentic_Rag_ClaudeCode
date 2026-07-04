@@ -108,5 +108,6 @@ class Retriever:
                 snippet=content[:300],
                 content=content,
                 file_name=payload.get("file_name"),
+                image_uri=payload.get("image_uri"),
             ))
         return results

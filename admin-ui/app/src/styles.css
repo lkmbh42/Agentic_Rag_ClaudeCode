@@ -86,8 +86,24 @@ th { color: var(--muted); font-weight: 600; }
 .bubble.assistant { align-self: flex-start; background: var(--panel); }
 .bubble .cites { margin-top: .5rem; display: flex; gap: .35rem; flex-wrap: wrap; }
 .bubble .chip { font-size: .72rem; padding: .1rem .45rem; border: 1px solid var(--line);
-  border-radius: 999px; color: var(--muted); }
+  border-radius: 999px; color: var(--muted); background: none; cursor: default; }
+.bubble .chip.linky { cursor: pointer; text-decoration: underline dotted; }
+.bubble .chip.linky:hover { color: var(--fg); border-color: var(--accent); }
 .bubble .meta { margin-top: .35rem; font-size: .72rem; color: var(--muted); }
+
+/* Phase 4: citation thumbnails + feedback */
+.cite-wrap { display: inline-flex; flex-direction: column; gap: .3rem; max-width: 100%; }
+.cite-thumb { max-width: 320px; max-height: 240px; border: 1px solid var(--line);
+  border-radius: 8px; object-fit: contain; background: #fff; }
+.thumb-missing { font-size: .72rem; }
+.feedback { margin-top: .45rem; display: flex; align-items: center; gap: .3rem; }
+.feedback .fb { font-size: .8rem; padding: .05rem .4rem; border: 1px solid var(--line);
+  border-radius: 6px; background: none; cursor: pointer; opacity: .6; }
+.feedback .fb:hover { opacity: 1; }
+.feedback .fb.on { opacity: 1; border-color: var(--accent); background: var(--panel); }
+.fb-reason { display: inline-flex; gap: .3rem; }
+.fb-reason input { font-size: .75rem; padding: .2rem .45rem; border-radius: 6px; min-width: 220px; }
+.fb-reason button { font-size: .75rem; padding: .2rem .5rem; }
 .chat-input { display: flex; gap: .5rem; padding: .8rem 1.4rem 1.2rem; width: 100%; max-width: 880px; margin: 0 auto; }
 .chat-input input { flex: 1; padding: .65rem .8rem; border-radius: 10px; }
 .sidebar .back { text-align: left; margin-bottom: .5rem; }
