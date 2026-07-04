@@ -4,7 +4,7 @@
 > `CLAUDE.md` (repo root) is the governing spec — its OPERATING RULES and phase
 > gates are non-negotiable. This file records where we are inside that plan.
 
-Last updated: 2026-07-04 · Branch: `feat/multimodal-migration` · HEAD at handoff: `10a0a63`
+Last updated: 2026-07-04 (Phase 3 gate) · Branch: `feat/multimodal-migration` · HEAD at handoff: `51230f1`
 
 ---
 
@@ -12,9 +12,9 @@ Last updated: 2026-07-04 · Branch: `feat/multimodal-migration` · HEAD at hando
 
 1. `git log --oneline -15` and read `docs/CHANGELOG.md`.
 2. Confirm clean tree on `feat/multimodal-migration`.
-3. **Phase 2 APPROVED 2026-07-04** (all three decisions + GPU deferrals ratified).
-   **Phase 3 is in progress** — see section 6 and CLAUDE.md Phase 3 for scope;
-   check `git log` + `docs/CHANGELOG.md` for what is already done.
+3. **Phase 2 APPROVED 2026-07-04.** **Phase 3 is CODE-COMPLETE and committed but
+   NOT approved.** Present the Phase 3 gate (section 4 below) and STOP. Do
+   **not** start Phase 4 until the operator writes exactly `PHASE 3 APPROVED`.
 4. Do not re-do finished work. Everything is committed; verify, don't rebuild.
 
 ---
@@ -50,89 +50,94 @@ Non-negotiable rules that keep biting if forgotten:
 | 0 — Audit & baseline | ✅ DONE, **APPROVED** 2026-07-02 | operator wrote PHASE 0 APPROVED |
 | 1 — Ollama→vLLM serving (text parity) | ✅ DONE, **APPROVED** 2026-07-03 | dev-Ollama hardware exception accepted |
 | 2 — Multimodal ingestion pipeline | ✅ DONE, **APPROVED** 2026-07-04 | operator wrote PHASE 2 APPROVED (decisions 1–3 + GPU deferrals ratified) |
-| 3 — Visual retrieval & fusion | 🔨 IN PROGRESS (started 2026-07-04) | — |
-| 4 — VLM answering & frontend | ⏳ | — |
+| 3 — Visual retrieval & fusion | ✅ **CODE-COMPLETE, awaiting gate** | **needs PHASE 3 APPROVED** |
+| 4 — VLM answering & frontend | ⏳ NEXT (do not start yet) | — |
 | 5 — Scale, security & cutover | ⏳ | — |
 
 ---
 
-## 3. What Phase 2 shipped (11 commits, all on the branch)
+## 3. What Phase 3 shipped (commits on the branch after the Phase 2 gate)
 
 ```
-f98adce MinIO object store — pinned image, SSE-on, typed client, tests
-75b1524 semantic chunker — token windows, heading bounds, table fidelity
-5a7d367 ingest_jobs progress tracking + worker DLQ/resume (extends BLPOP worker)
-c8a2b47 fix(repo): track app/models/* — silently gitignored since init
-e2839da Docling layout-aware parser (PDF/DOCX/PPTX/XLSX, de+en OCR)
-1c515ac fix: worker survives stale queue payloads (DocumentGone) + loop guard
-f1b7f8f figure pipeline — crop to MinIO, VLM /caption, type=figure chunks
-c36f436 page-image pipeline — render, ColQwen2 service, docs_pages multivector
-0a79a39 idempotency + ACL-payload gates, ACL auditor, sampling harness
-370c01e admin UI ingestion status, re-ingest, failure reason
-10a0a63 refresh service lockfiles (vlm, colqwen stub images)
+530000e docs: record PHASE 2 APPROVED gate (2026-07-04), Phase 3 started
+68361d5 fix(deps): openai 1.54 -> 1.58 — 1.54 crashes against httpx 0.28
+4594f37 fix(ops): alembic env keeps existing app loggers enabled
+1d67393 config(phase3): visual/fusion/metadata/context/cache-purge tunables
+44e7e5f query intent router — 4 intents, few-shot DE/EN, deterministic fallback
+c670e44 visual retriever — ColQwen2 query embedding, docs_pages MAX_SIM, in-query ACL
+2310b93 metadata path — ACL-scoped Postgres lookup (+ documents.uploaded_by_id)
+85a4e7d context assembler — token/image budgets, ACL re-check, base64 at the edge
+5b9ecf8 intent-routed graph — fusion, metadata node, page hits, /search pages
+09161ab semantic cache — ACL-scope-hash key, expired-entry eviction
+34c61d8 eval: visual_hit@5 metric + --retrieval-only mode
+51230f1 eval: phase3 retrieval + router reports (dev run)
 ```
 
-New/changed modules:
-- `app/ingestion/object_store.py` — MinIO client (`figures/{doc_id}/{figure_id}.png`,
-  `pages/{doc_id}/{page_no}.png`); internal `s3://` URIs only, no presigned/public URLs.
-- `app/ingestion/chunker.py` — `build_chunks_v2`: 350–600-token windows, 15% overlap,
-  heading-bounded; tables → GitHub-MD + one-line summary + row-serialization (>8 rows).
-- `app/ingestion/docling_parser.py` — Docling parse → typed blocks (text|table|figure)
-  with page geometry; tesseract `deu+eng` OCR. Legacy parsers kept as `PARSER_BACKEND=legacy`.
-- `app/ingestion/figures.py` — `FigureCaptioner` → `vlm` service `POST /caption`; graceful
-  fallback to document caption; never raises.
-- `app/ingestion/pages.py` + `pages_index.py` — render ≤1024px (PyMuPDF) → MinIO → ColQwen2
-  multivector → Qdrant `docs_pages` (MAX_SIM, binary quantization, ACL payload).
-- `app/ingestion/jobs.py` + `app/models/ingest.py` + migration `d91a4b7f02e1` — `ingest_jobs`
-  table (QUEUED/PARSING/CAPTIONING/INDEXING/INDEXED/FAILED), retries reuse the row,
-  dead-letter list `ingest:dlq`, `requeue_dlq()`.
-- `app/ingestion/acl_audit.py` — scans a Qdrant collection for objects missing ACL payload
-  (reused by Phase 5 red-team).
-- `worker/main.py` — job progress via `on_stage`, DLQ, resilient to stale payloads.
-- `services/vlm/main.py` — `POST /caption` (Qwen2.5-VL-7B); deterministic `[STUB-Caption]`
-  in dev, real model when `VLM_IMPLEMENTED=true`.
-- `services/colqwen/` (NEW) + `docker/colqwen.Dockerfile` — `/embed_image` + `/embed_query`;
-  deterministic stub in dev, real `vidore/colqwen2-v1.0` (colpali-engine) when
-  `COLQWEN_IMPLEMENTED=true`.
-- `app/api/documents.py` — `GET /documents/{id}/ingest-status` (ACL-scoped).
-- `admin-ui/app/src/{api.ts,App.tsx,styles.css}` — Documents view shows stage/attempt/
-  re-ingest/failure-reason. `tsc --noEmit` clean.
-- Compose: `minio` (prod+dev, pinned digest, SSE-S3 auto-encryption on), `colqwen` (prod GPU),
-  worker mounts `/models` + `DOCLING_ARTIFACTS_PATH`. All image digests pinned (docs/PINS.md).
+New/changed modules (Phase 2 module map lives in docs/CHANGELOG.md):
+- `app/router/` (NEW) — `IntentRouter.classify()` → `text|visual|metadata|multi_doc`;
+  few-shot DE/EN prompt in `app/graph/prompts.py::INTENT_ROUTER_SYSTEM`; validation +
+  `text` fallback outside the model; rides `get_class_llm()` (Qwen2.5-3B role).
+- `app/retrieval/visual.py` (NEW) — query → colqwen `/embed_query` → `docs_pages`
+  MAX_SIM with in-query ACL filter, top-4; degrades to [] in dev.
+- `app/retrieval/fusion.py` (NEW) — RRF (k=60) merge of reranked text + MAX_SIM pages;
+  ties text-first; consumed by the assembler as packing order.
+- `app/retrieval/metadata_lookup.py` (NEW) — deterministic ACL-scoped Postgres lookup
+  for the metadata intent; DE/EN rendering; `documents.uploaded_by_id` (migration
+  `f3a9c1d24e57`, backfilled from audit log) supplies the "author" facet.
+- `app/context/` (NEW) — assembler: ACL re-check (CRITICAL log on drop), hard token
+  budget, ≤4 images, s3://→base64 only here; `packed_chunks` = citation ground truth.
+  Generator passes `max_images=0` until Phase 4's VLM consumes images.
+- `app/graph/` — router node uses IntentRouter (prod runtime pins it to the class
+  model); `metadata_lookup` node (hits→generator, miss→retriever); visual intent runs
+  page retrieval alongside text; legacy 9-category routes + `unsupported` node removed;
+  `route` in API/audit now carries the intent; citations carry `file_name`.
+- `app/retrieval/semantic_cache.py` — scope-hash cache key (STRICT equality, in-query
+  filter), opportunistic + periodic eviction (`purge_expired()`, worker sweep).
+- `app/api/search.py` — `include_pages` flag returns visual-path results for the eval.
 
 Key dependency facts (do not "fix"):
 - `docling==2.108.0` EXACT — the `2.15.*` range resolved an incompatible `docling-core` that
   broke imports; the pair must move together.
-- `httpx` bumped `0.27.*` → `0.28.*` because docling 2.108 requires >=0.28 (openai 1.54 is fine).
-- `libgl1` + `libglib2.0-0` added to `docker/backend.Dockerfile` for TableFormer's opencv.
-- `tesseract-ocr-deu` + `tesseract-ocr-eng` language packs added (fixes AUDIT §8 EN-only OCR gap).
+- `httpx==0.28.*` (docling needs >=0.28) **requires `openai>=1.55.3`** — 1.54 passes the
+  removed `proxies=` kwarg and crashes at client construction (pinned `1.58.*`,
+  fixed in Phase 3; FakeLLM-based tests will NOT catch a regression here).
+- `libgl1` + `libglib2.0-0` in `docker/backend.Dockerfile` for TableFormer's opencv;
+  tesseract `deu+eng` packs installed.
+- alembic env.py must keep `disable_existing_loggers=False` — in-process migrations
+  (the test harness) otherwise silence all `rag.*` loggers.
 
 ---
 
-## 4. Phase 2 DoD — gate checklist (present this, then wait)
+## 4. Phase 3 DoD — gate checklist (present this, then wait)
 
 | DoD item | Status | Evidence |
 |---|---|---|
-| 3 real docs of each type ingest end-to-end | ⚠️ partial (flagged) | fixture corpus of every type parses in tests + live PDF ingest verified; "real-corpus 3-of-each" volume run is a GPU-host step (no real corpus in repo — AUDIT §8) |
-| Table fidelity ≥90% (manual review) | ✅ tooling / ⚠️ human sign-off | `eval/ingest_sample.py` side-by-side HTML; tables extracted structured, never flattened (`tests/test_chunker.py`, `test_docling_parser.py`) |
-| Caption QA ≥85% useful | ⚠️ GPU-deferred (flagged) | crop→MinIO→/caption→chunk mechanism proven; dev uses `[STUB-Caption]`; real quality on GPU host |
-| Re-ingest → zero new vectors (CI) | ✅ | `tests/test_ingest_gates.py::test_reingest_creates_zero_new_vectors` |
-| ACL payload on 100% of new objects (automated) | ✅ | `app/ingestion/acl_audit.py` + `test_all_indexed_objects_carry_acl_payload`; live chunk confirmed |
-| docs_pages storage measured; binary quantization confirmed | ✅ | live: MAX_SIM + BinaryQuantization(always_ram) active; ~32× (400KB→12.5KB / 50 pages) |
+| Router accuracy ≥90% on labeled set (CI test) | ✅ **94.4%** | `tests/test_router.py::test_router_accuracy_on_labeled_set` (marker `llm`, real model) — 68/72; all misses degrade to `text`; `eval/reports/phase3_router.md` |
+| Text hit@5 ≥ baseline | ✅ **75.0% vs 73.9%** | `eval/reports/phase3_retrieval.md` (130-case retrieval-only run, live dev stack) |
+| Visual hit@5 ≥75% | ⚠️ **GPU-deferred (flagged)** | mechanism proven end-to-end (docs_pages MAX_SIM + in-query ACL + `/search include_pages` + `visual_hit@5` metric); dev colqwen is the deterministic stub and `docs_pages` is empty under `VISUAL_PATH=degraded` |
+| Cache never returns a hit across differing ACL scopes (explicit test) | ✅ | `tests/test_semantic_cache.py::test_scope_hash_is_the_cache_key` (+ `test_never_served_cross_scope`); scope-hash filtered inside the Qdrant query |
+| Assembler enforces token + image budgets under adversarial test | ✅ | `tests/test_context_assembler.py` (200×500-token flood, 10-image flood, oversized-first-block, ACL re-check CRITICAL) |
+| p95 added router latency ≤400 ms | ⚠️ **GPU-deferred (flagged)** | dev CPU p95 = 3481 ms (Ollama, ~350-token prefill); the CI test asserts ≤400 ms automatically once `LLM_BACKEND=vllm`; re-measure via `eval/router_report.py` |
 
-Three decisions needing operator ratification at this gate:
-1. **Extended the BLPOP worker** (added `ingest_jobs`/DLQ/progress) instead of rewriting to
-   arq/rq — brownfield rule; justified in `docs/CHANGELOG.md` Phase 2.
-2. **Captioning reuses the `vlm` service boundary** (`POST /caption`), superseding the 501
-   stub (CLAUDE.md §10), not a parallel endpoint.
-3. **GPU deferrals** (caption quality, ColQwen2 retrieval quality, real-corpus volume run):
-   dev proves wiring with deterministic stubs + `VISUAL_PATH=degraded`; quality gates run at
-   GPU provisioning — same deferral shape the operator already accepted in Phase 1 (load test).
+Decisions needing operator ratification at this gate:
+1. **4-intent taxonomy supersedes the legacy 9-category router.** The graph no longer
+   consumes `ROUTES`; the `unsupported` dead-end class is removed (small models over-used
+   it); `route` in API/audit responses now carries `text|visual|metadata|multi_doc`.
+2. **Schema extension `documents.uploaded_by_id`** (nullable, FK users SET NULL,
+   migration `f3a9c1d24e57`, backfilled from audit-log UPLOAD entries) — the spec's
+   metadata "author" facet had no data source; ratify the KEEP-component touch.
+3. **Cache scope-hash is STRICTER than the old subset rule** — differing permission
+   sets never share entries (superset users included); hit rate pays for hard scope
+   isolation; pre-Phase-3 entries are never served (cold-cache migration).
+4. **GPU deferrals** (visual hit@5 ≥75%, router p95 ≤400 ms) — same shape as the
+   Phase 1 load and Phase 2 caption-quality deferrals the operator already accepted.
 
 Incidental fixes surfaced and committed separately:
-- `c8a2b47`: `app/models/*` was silently gitignored since init (`models/` pattern caught
-  `app/models/`); a clean checkout couldn't boot. Pattern root-anchored, files committed.
-- `1c515ac`: worker survives stale queue payloads for deleted docs instead of crashing on FK.
+- `68361d5`: openai 1.54 + httpx 0.28 = TypeError at client construction (Phase 2's
+  "openai 1.54 is fine" was wrong; masked because graph tests inject FakeLLM).
+- `4594f37`: in-process alembic (test harness) silenced all app loggers
+  (`fileConfig(disable_existing_loggers=False)` now).
+- Citations now propagate `file_name` (AUDIT §11 deferral folded in).
 
 ---
 
@@ -147,7 +152,9 @@ Incidental fixes surfaced and committed separately:
   2. copy assets in (only `./app`, `./worker` are bind-mounted): `for f in tests services eval pytest.ini scripts alembic alembic.ini; do docker compose -f docker-compose.dev.yml cp $f backend:/srv/$f; done`
      — if `/srv/tests` already exists, `cp` NESTS it; remove first as root: `exec -T -u root backend sh -c "rm -rf /srv/tests"`.
   3. `docker compose -f docker-compose.dev.yml exec -T backend python -m pytest -q`
-     (full = 126 tests; `-m "not docling"` skips the slow layout-model tests, ~10 of them).
+     (full = 163 tests; `-m "not docling and not llm"` = 149 fast; marker `docling` =
+     13 slow layout tests; marker `llm` = the router accuracy gate, 72 real LLM calls,
+     ~4 min on the dev CPU).
 - After changing `requirements*.txt` or the Dockerfile: rebuild (`docker compose -f
   docker-compose.dev.yml build backend worker`), recreate (`up -d backend worker`), then
   regenerate the lockfile from the pristine image:
@@ -161,23 +168,24 @@ Incidental fixes surfaced and committed separately:
 
 ---
 
-## 6. Phase 3 preview (start ONLY after PHASE 2 APPROVED)
+## 6. Phase 4 preview (start ONLY after PHASE 3 APPROVED)
 
-Per CLAUDE.md Phase 3 — query-time use of the new collections:
-1. Query router (`app/router/`, Qwen2.5-3B) → `text | visual | metadata | multi_doc`; JSON-only,
-   deterministic `text` fallback; unit tests ≥90% on a labeled set of ≥60 queries.
-2. Metadata path → Postgres-filtered lookup first.
-3. Fusion: text-hybrid + ColQwen2 retrieval per intent; RRF merge; text through bge-reranker;
-   visual top-4 by MAX_SIM.
-4. Context assembler (`app/context/`): hard token budget, citations, ACL re-verification before
-   assembly (defense in depth), image URIs → base64 only here.
-5. Semantic cache upgrade: cache key includes user's ACL-scope hash (never leak across scopes) —
-   this also closes AUDIT finding F1/F4. Also fold in the deferred expired-entry eviction noted
-   in AUDIT §11.
-6. Retrieval eval: visual hit@5 ≥75%, text hit@5 ≥ baseline; p95 added router latency ≤400ms.
+Per CLAUDE.md Phase 4 — VLM answering & frontend:
+1. Swap vLLM served model to Qwen2.5-VL-32B-Instruct-AWQ (pinned); text-only parity
+   first (golden text subset ≥ Phase 1 score).
+2. Answer prompt contract (DE/EN): cite `[doc, Seite N]`; "abgelesen" vs "geschätzt"
+   qualifier for chart values; refuse on insufficient context.
+3. Streaming end-to-end (SSE exists; extend to image-context turns).
+4. Frontend: citation chips, inline thumbnails via gateway-proxied ACL-checked MinIO
+   URLs (never presigned), 👍/👎 feedback to Postgres.
+5. Full golden_v2 run → `eval/reports/phase4.md`.
+Phase-3 hooks ready for it: the assembler already produces base64 images — flip the
+generator's `max_images=0` to the config value and pass `assembled.images` into the
+VLM call; page_hits are in graph state; `context_images` is tracked.
 
-Deferred observations parked for Phase 3+ (AUDIT.md §11): ACL-scoped cache keys (F1), chat
-per-turn state reset, SSE circuit breaker, upload size cap, citations `file_name` propagation.
+Deferred observations still parked (AUDIT.md §11): chat per-turn state reset, SSE
+circuit breaker, upload size cap. GPU-host checklist additionally: visual hit@5 gate,
+router p95 gate, Phase 1 vLLM parity + load, Phase 2 caption quality + volume run.
 Baseline to beat lives in `eval/reports/baseline.md`.
 
 ---

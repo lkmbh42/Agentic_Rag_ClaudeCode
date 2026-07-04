@@ -1,5 +1,84 @@
 # CHANGELOG — Multimodal RAG Migration
 
+## Phase 3 — Visual retrieval & fusion (code-complete, awaiting gate, 2026-07-04)
+
+**Measured (dev host):** router accuracy **94.4%** on 72 labeled DE/EN queries
+(DoD ≥90% ✅; all 4 misses degrade to the safe `text` path;
+`eval/reports/phase3_router.md`); text hit@5 **75.0%** ≥ baseline 73.9% ✅
+(`eval/reports/phase3_retrieval.md`); cross-scope cache test ✅; assembler
+budget tests ✅. Full suite: 149 fast + 13 docling + 1 llm gate, all green.
+**GPU-deferred (flagged):** visual hit@5 ≥75% (dev colqwen is the deterministic
+stub, `docs_pages` empty under `VISUAL_PATH=degraded`) and router p95 ≤400 ms
+(vLLM); both re-run at GPU provisioning via `eval/run_eval.py --retrieval-only`
+and `eval/router_report.py`.
+
+- **Query intent router** (task 1): `app/router/` — `IntentRouter.classify()` →
+  `text | visual | metadata | multi_doc`. The LLM call (few-shot DE+EN, JSON-only,
+  `INTENT_ROUTER_SYSTEM` in the central prompts module) rides the classification model
+  (`llm_class_model`, Qwen2.5-3B role, via `get_class_llm()`); everything around it is
+  deterministic — closed-set validation, and ANY failure (unreachable backend, bad JSON,
+  unknown label, empty query) falls back to `text` (spec). Labeled set
+  `eval/router_labeled.jsonl` (72 queries, DE+EN, incl. traps: table→text,
+  content-when vs property-when, single-chart comparisons→visual);
+  `tests/test_router.py` gates accuracy ≥90% (marker `llm`, like `docling`) and asserts
+  p95 ≤400 ms only on vLLM (dev CPU exempt, Phase 1 exception). **Decision (flag at
+  gate):** the new 4-intent taxonomy SUPERSEDES the legacy 9-category router; the graph
+  no longer consumes `ROUTES` (kept only for `LLMClient.route()` rollback); the old
+  "unsupported" dead-end class is gone (small models over-used it; every intent now ends
+  in a document-grounded answer attempt). `route` in API/audit carries the intent.
+- **Metadata path** (task 2): `metadata` intent → `app/retrieval/metadata_lookup.py`,
+  a deterministic ACL-scoped Postgres lookup (filename/collection keyword narrowing with
+  hyphen-compound handling, file-type filter, newest-first, `metadata_max_documents`),
+  rendered as `type=metadata` chunks in the question's language (Rule 8); no hits → the
+  graph falls back to normal retrieval (spec: "then optional retrieval"); hits skip the
+  LLM relevance grader (deterministic ≠ gradeable). **Decision (flag at gate):** the
+  spec's "author" facet needs data that didn't exist — added nullable
+  `documents.uploaded_by_id` (migration `f3a9c1d24e57`, FK users SET NULL), set on
+  upload, **backfilled from the audit log's UPLOAD entries**; pre-audit rows render
+  "unbekannt/unknown".
+- **Visual retrieval** (task 3): `app/retrieval/visual.py` — query → `colqwen`
+  `/embed_query` (client shared with ingestion) → Qdrant `docs_pages` MAX_SIM
+  multivector query with the ACL filter INSIDE the query (Rule 5), capped
+  `visual_top_k_pages=4` (spec). Degrades to [] (never errors) when the visual path is
+  degraded (dev), the service is down, or the collection is absent.
+  `app/retrieval/fusion.py` RRF-merges (k=60) the reranked text list and the MAX_SIM
+  page list into the assembler's packing order; ties resolve text-first. The graph
+  runs page retrieval alongside text-hybrid for `visual` intent only.
+- **Context assembler** (task 4): `app/context/assembler.py` — the LAST gate before the
+  generator: ACL re-verification (drops + CRITICAL log; defense in depth — a drop here
+  means a Rule 5 bug upstream), hard token budget (`context_token_budget`, chunker's
+  estimator; oversized first block truncated rather than starving), ≤`context_max_images`
+  page images with MinIO s3://→base64 resolved ONLY here, and `packed_chunks` as the
+  exact [n]-citation source of truth (citations now map against the packed context, not
+  the raw retrieval set). Images are never persisted into graph state (checkpointer
+  bloat); generator passes `max_images=0` until the Phase 4 VLM contract consumes them
+  (loading MinIO images for a text-only model would be dead I/O per visual turn — the
+  budget mechanics are fully unit-tested under adversarial input, per DoD).
+- **Semantic cache scope-hash key** (task 5, closes AUDIT F1/F4 + §11 eviction):
+  entries now carry the ASKER's full ACL-scope hash; lookup filters on scope-hash
+  equality INSIDE the Qdrant query. **Decision (flag at gate):** this is STRICTER than
+  the old subset rule — a superset-privileged user no longer shares a narrower user's
+  entries (hit rate pays for hard scope isolation; same-scope repeats, the common case,
+  still hit). Pre-Phase-3 entries (no scope_hash) are never served — safe migration,
+  cold cache. Subset source check kept as an independent second barrier. Expired
+  entries: opportunistic delete on lookup + `purge_expired()` swept by the worker every
+  `semantic_cache_purge_interval_s`. Hit/miss metrics were already exported
+  (`record_cache`); threshold already configurable.
+- **Retrieval eval** (task 6): `/search` gained `include_pages` (visual-path results in
+  the response; empty when degraded); `eval/run_eval.py` scores `visual_hit@5` for
+  chart/diagram/scanned/table cases against ground-truth (doc, page) targets and reports
+  it in the aggregate. Visual quality numbers are **GPU-deferred** (dev colqwen is the
+  deterministic stub; `docs_pages` is empty under `VISUAL_PATH=degraded`) — same
+  deferral shape the operator accepted in Phases 1–2.
+- **Incidental fixes** (separate commits): openai pin 1.54→1.58 (1.54 + httpx 0.28
+  crashes at client construction — masked until Phase 3 made real in-container LLM
+  calls); alembic `fileConfig(disable_existing_loggers=False)` (in-process migrations
+  silenced all app loggers); citations now propagate `file_name` (AUDIT §11 deferral).
+- **ROLLBACK:** every Phase 3 feature is additive and env-gated. Router mis-routing
+  degrades to `text` by construction; visual path off = `VISUAL_PATH=degraded` (dev
+  default); cache reverts by clearing the `semantic_cache` collection (entries are
+  disposable). The migration is backward-compatible (nullable column, SET NULL FK).
+
 ## Phase 2 — Multimodal ingestion pipeline (gate: "PHASE 2 APPROVED", 2026-07-04)
 
 > Gate ratified all three flagged decisions: (1) BLPOP worker extended instead of arq/rq
