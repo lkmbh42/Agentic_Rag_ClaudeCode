@@ -135,10 +135,22 @@ class Settings(BaseSettings):
     # --- retrieval / cache ---
     retrieval_top_k: int = 20
     retrieval_top_n: int = 5
+    # Phase 3 visual retrieval: pages returned by MAX_SIM, capped (spec: top 4).
+    visual_top_k_pages: int = 4
+    # Phase 3 metadata path: max documents listed by a metadata lookup.
+    metadata_max_documents: int = 10
+    # Phase 3 context assembler: hard budgets for what reaches the generator.
+    # Token budget sized to the dev 3B context (prod VL-32B raises it via env).
+    context_token_budget: int = 3000
+    context_max_images: int = 4  # spec: ≤4 page images per answer
+    # RRF constant for merging text-chunk and page-image rankings (standard 60).
+    fusion_rrf_k: int = 60
     retrieval_p95_target_ms: int = 800
     semantic_cache_collection: str = "semantic_cache"
     semantic_cache_similarity: float = 0.95
     semantic_cache_ttl_s: int = 86400
+    # Phase 3: periodic sweep of expired cache entries (worker idle loop).
+    semantic_cache_purge_interval_s: int = 3600
 
     # --- circuit breakers / quotas ---
     max_graph_iterations: int = 25
