@@ -402,8 +402,16 @@ def render_report(agg: Aggregate, args: argparse.Namespace, elapsed: float,
         f"- Date: {time.strftime('%Y-%m-%d %H:%M')}  ·  Cases: {n}  ·  "
         f"Subset: {args.subset}  ·  Duration: {elapsed / 60:.1f} min",
         f"- Backend: `{args.base_url}`  ·  Judge: "
-        f"{'off' if args.no_judge else args.judge_model}",
+        f"{'off' if args.no_judge or args.retrieval_only else args.judge_model}",
         "",
+    ]
+    if args.retrieval_only:
+        lines += [
+            "> **Retrieval-only run:** answer metrics (pass rate, citations, judge)",
+            "> were NOT measured — only the hit@k rows are meaningful.",
+            "",
+        ]
+    lines += [
         "## Aggregate",
         "",
         "| metric | overall |",
@@ -418,13 +426,14 @@ def render_report(agg: Aggregate, args: argparse.Namespace, elapsed: float,
         f"| citation → correct doc | {pct(agg.rate('citation_ok'))} |",
         f"| timeouts/errors | {sum(1 for r in agg.rows if r.get('error'))} |",
     ]
-    if not args.no_judge:
+    judge_off = args.no_judge or args.retrieval_only
+    if not judge_off:
         lines.append(f"| judge correctness | {pct(agg.rate('judge_correctness'))} |")
     lines += ["", "## By modality", "",
               "| modality | n | pass | hit@5 | judge |", "|---|---|---|---|---|"]
     for mod, rows in sorted(agg.by("modality").items()):
         sub = Aggregate(rows)
-        judge_s = "—" if args.no_judge else pct(sub.rate("judge_correctness"))
+        judge_s = "—" if judge_off else pct(sub.rate("judge_correctness"))
         lines.append(f"| {mod} | {len(rows)} | {pct(sub.rate('passed'))} | "
                      f"{pct(sub.rate('hit@5'))} | {judge_s} |")
     lines += ["", "## By language", "",
