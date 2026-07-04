@@ -38,6 +38,7 @@ _settings = get_settings()
 
 class LLMClient(Protocol):
     def route(self, query: str) -> str: ...
+    def route_intent(self, query: str) -> str | None: ...
     def plan(self, query: str) -> list[str]: ...
     def rewrite_query(self, query: str) -> str: ...
     def generate(self, query: str, contexts: list[str],
@@ -134,6 +135,12 @@ class OpenAILLM:
         route = self._json(prompts.ROUTER_SYSTEM, query, "route", "simple_rag", max_tokens=40)
         return route if route in ROUTES else "simple_rag"
 
+    def route_intent(self, query: str) -> str | None:
+        """Raw intent label from the model, or None on any failure. Validation
+        and the deterministic `text` fallback live in app/router/classifier.py."""
+        out = self._json(prompts.INTENT_ROUTER_SYSTEM, query, "intent", None, max_tokens=16)
+        return out if isinstance(out, str) else None
+
     def plan(self, query: str) -> list[str]:
         steps = self._json(prompts.PLANNER_SYSTEM, query, "steps", [query], max_tokens=200)
         return [str(s) for s in steps][:3] or [query]
@@ -174,3 +181,11 @@ class OpenAILLM:
 @lru_cache
 def get_llm() -> LLMClient:
     return OpenAILLM()
+
+
+@lru_cache
+def get_class_llm() -> LLMClient:
+    """Client bound to the classification model (Qwen2.5-3B role in the model
+    manifest) — used by the intent router so routing stays on the small model
+    when prod serves a separate large generator."""
+    return OpenAILLM(model=_settings.llm_class_model)

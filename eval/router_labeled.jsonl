@@ -1,0 +1,74 @@
+# Labeled routing set (Phase 3). 72 queries, DE+EN, 4 intents. Used by tests/test_router.py: accuracy gate >=90% (CLAUDE.md Phase 3 DoD).
+# Schema: id, lang(de|en), query, intent(text|visual|metadata|multi_doc). Deliberate traps: table questions are text; content-"when/who" is text vs property-"when/who" is metadata; comparisons INSIDE one chart are visual.
+{"id":"r001","lang":"de","query":"Wie lang müssen Passwörter laut IT-Richtlinie mindestens sein?","intent":"text"}
+{"id":"r002","lang":"de","query":"Wie oft muss das Passwort spätestens gewechselt werden?","intent":"text"}
+{"id":"r003","lang":"de","query":"Welche Kündigungsfrist gilt laut Arbeitsvertrag?","intent":"text"}
+{"id":"r004","lang":"de","query":"Was ist das Ziel des Onboarding-Programms?","intent":"text"}
+{"id":"r005","lang":"de","query":"Welche Schritte umfasst der Freigabeprozess für Bestellungen?","intent":"text"}
+{"id":"r006","lang":"de","query":"Wie hoch ist der Spesensatz für Übernachtungen laut Reisekostenrichtlinie?","intent":"text"}
+{"id":"r007","lang":"de","query":"Wer ist laut Richtlinie für die Vergabe von Zugriffsrechten zuständig?","intent":"text"}
+{"id":"r008","lang":"de","query":"Wie viele Urlaubstage stehen Mitarbeitenden pro Jahr zu?","intent":"text"}
+{"id":"r009","lang":"de","query":"Was besagt Abschnitt 3 der Datenschutzrichtlinie?","intent":"text"}
+{"id":"r010","lang":"de","query":"Welche Werte stehen in der Tabelle der Notfallkontakte?","intent":"text"}
+{"id":"r011","lang":"en","query":"What is the minimum password length required by the IT policy?","intent":"text"}
+{"id":"r012","lang":"en","query":"How many vacation days do employees get per year?","intent":"text"}
+{"id":"r013","lang":"en","query":"What does the data protection policy say about personal devices?","intent":"text"}
+{"id":"r014","lang":"en","query":"Which roles are allowed to approve purchase orders?","intent":"text"}
+{"id":"r015","lang":"en","query":"What is the notice period stated in the employment contract?","intent":"text"}
+{"id":"r016","lang":"en","query":"List the values in the emergency contacts table.","intent":"text"}
+{"id":"r017","lang":"en","query":"What is the maximum reimbursement for hotel stays?","intent":"text"}
+{"id":"r018","lang":"en","query":"What are the on-call compensation rules?","intent":"text"}
+{"id":"r019","lang":"de","query":"Was bedeutet 'least privilege' in der IT-Richtlinie?","intent":"text"}
+{"id":"r020","lang":"en","query":"When must a security incident be reported to the security officer?","intent":"text"}
+{"id":"r021","lang":"de","query":"Was zeigt das Balkendiagramm auf Seite 3 des Quartalsberichts?","intent":"visual"}
+{"id":"r022","lang":"de","query":"Welcher Trend ist in der Umsatzgrafik zu erkennen?","intent":"visual"}
+{"id":"r023","lang":"de","query":"Beschreibe das Organigramm im Anhang.","intent":"visual"}
+{"id":"r024","lang":"de","query":"Welche Achsenbeschriftung hat das Diagramm zur Auslastung?","intent":"visual"}
+{"id":"r025","lang":"de","query":"Was ist auf dem Foto in der Sicherheitsunterweisung zu sehen?","intent":"visual"}
+{"id":"r026","lang":"de","query":"Wie ist der Prozess im Flussdiagramm dargestellt?","intent":"visual"}
+{"id":"r027","lang":"de","query":"Welche Farbe hat die Linie für 2023 im Liniendiagramm?","intent":"visual"}
+{"id":"r028","lang":"de","query":"Was steht auf dem gescannten Formular auf Seite 2?","intent":"visual"}
+{"id":"r029","lang":"en","query":"What does the pie chart in the annual report show?","intent":"visual"}
+{"id":"r030","lang":"en","query":"Which quarter has the highest bar in the revenue chart?","intent":"visual"}
+{"id":"r031","lang":"en","query":"Describe the network diagram in the architecture document.","intent":"visual"}
+{"id":"r032","lang":"en","query":"What trend does the cost curve show over time?","intent":"visual"}
+{"id":"r033","lang":"en","query":"What is depicted in figure 4?","intent":"visual"}
+{"id":"r034","lang":"en","query":"Read the values from the axis labels of the utilization chart.","intent":"visual"}
+{"id":"r035","lang":"en","query":"What does the photo on the last page show?","intent":"visual"}
+{"id":"r036","lang":"de","query":"Vergleiche die Balkenhöhen im Diagramm auf Seite 5.","intent":"visual"}
+{"id":"r037","lang":"en","query":"What is written on the scanned invoice image?","intent":"visual"}
+{"id":"r038","lang":"de","query":"Welche Symbole werden im Schaltplan verwendet?","intent":"visual"}
+{"id":"r039","lang":"de","query":"Welches ist die neueste Version der IT-Sicherheitsrichtlinie?","intent":"metadata"}
+{"id":"r040","lang":"de","query":"Wann wurde das Onboarding-Handbuch zuletzt aktualisiert?","intent":"metadata"}
+{"id":"r041","lang":"de","query":"Wer hat den Jahresbericht hochgeladen?","intent":"metadata"}
+{"id":"r042","lang":"de","query":"Wie viele Seiten hat der Arbeitsvertrag?","intent":"metadata"}
+{"id":"r043","lang":"de","query":"Welche Dokumente gibt es in der Sammlung Personal?","intent":"metadata"}
+{"id":"r044","lang":"de","query":"Welche PDF-Dateien wurden diese Woche hochgeladen?","intent":"metadata"}
+{"id":"r045","lang":"de","query":"Von wann ist die aktuellste Fassung der Reisekostenrichtlinie?","intent":"metadata"}
+{"id":"r046","lang":"en","query":"What is the latest version of the security policy document?","intent":"metadata"}
+{"id":"r047","lang":"en","query":"When was the employee handbook uploaded?","intent":"metadata"}
+{"id":"r048","lang":"en","query":"Who is the author of the quarterly report?","intent":"metadata"}
+{"id":"r049","lang":"en","query":"How many pages does the onboarding guide have?","intent":"metadata"}
+{"id":"r050","lang":"en","query":"Which documents are available in the HR collection?","intent":"metadata"}
+{"id":"r051","lang":"en","query":"List all documents uploaded in June.","intent":"metadata"}
+{"id":"r052","lang":"en","query":"What file type is the org chart document?","intent":"metadata"}
+{"id":"r053","lang":"de","query":"Gibt es eine neuere Version des Datenschutzkonzepts?","intent":"metadata"}
+{"id":"r054","lang":"en","query":"Which document was updated most recently?","intent":"metadata"}
+{"id":"r055","lang":"de","query":"Vergleiche die Urlaubsregelungen in den beiden Betriebsvereinbarungen.","intent":"multi_doc"}
+{"id":"r056","lang":"de","query":"Fasse alle Sicherheitsrichtlinien zusammen.","intent":"multi_doc"}
+{"id":"r057","lang":"de","query":"Was sind die wichtigsten Unterschiede zwischen Arbeitsvertrag und Betriebsvereinbarung?","intent":"multi_doc"}
+{"id":"r058","lang":"de","query":"Erstelle eine Übersicht über alle Reisekostenregelungen aus den Richtlinien.","intent":"multi_doc"}
+{"id":"r059","lang":"de","query":"Welche gemeinsamen Anforderungen nennen die IT-Richtlinie und die Datenschutzrichtlinie?","intent":"multi_doc"}
+{"id":"r060","lang":"de","query":"Fasse die Quartalsberichte des letzten Jahres zusammen.","intent":"multi_doc"}
+{"id":"r061","lang":"de","query":"Vergleiche die Kündigungsfristen in allen Verträgen.","intent":"multi_doc"}
+{"id":"r062","lang":"de","query":"Was sagen die verschiedenen Richtlinien zum Homeoffice?","intent":"multi_doc"}
+{"id":"r063","lang":"en","query":"Compare the vacation policies across the two agreements.","intent":"multi_doc"}
+{"id":"r064","lang":"en","query":"Summarize all security policies.","intent":"multi_doc"}
+{"id":"r065","lang":"en","query":"What are the key differences between the 2023 and 2024 annual reports?","intent":"multi_doc"}
+{"id":"r066","lang":"en","query":"Give me an overview of the travel rules from all policies.","intent":"multi_doc"}
+{"id":"r067","lang":"en","query":"Which requirements appear in both the IT policy and the data protection policy?","intent":"multi_doc"}
+{"id":"r068","lang":"en","query":"Summarize the main points of every onboarding document.","intent":"multi_doc"}
+{"id":"r069","lang":"en","query":"Compare the notice periods across all contracts.","intent":"multi_doc"}
+{"id":"r070","lang":"en","query":"What do the different policies say about remote work?","intent":"multi_doc"}
+{"id":"r071","lang":"de","query":"Erstelle einen Gesamtüberblick über alle Dokumente zur Arbeitssicherheit.","intent":"multi_doc"}
+{"id":"r072","lang":"en","query":"Aggregate the findings from all audit reports.","intent":"multi_doc"}

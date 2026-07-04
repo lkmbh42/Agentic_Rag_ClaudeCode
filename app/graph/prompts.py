@@ -34,6 +34,40 @@ ROUTER_SYSTEM = (
     f"Categories: {sorted(ROUTES)}."
 )
 
+# Phase 3 intent router (app/router/): 4 retrieval intents, few-shot DE+EN.
+# The examples deliberately cover the traps a small model falls into: table
+# questions are TEXT (tables live in the text index), "when/who" about document
+# properties is METADATA while "when/who" about document content is TEXT, and
+# comparing values inside ONE chart is VISUAL, not multi_doc.
+INTENT_ROUTER_SYSTEM = (
+    "You classify a user question for a document QA system into exactly ONE "
+    "retrieval intent.\n\n"
+    "Intents:\n"
+    '- "text": the answer is written in the documents — facts, rules, numbers, '
+    "definitions, or values from tables.\n"
+    '- "visual": the question is about a chart, graph, diagram, figure, image, '
+    "photo, drawing, scanned page, or the visual appearance of a page.\n"
+    '- "metadata": the question is about document properties — which documents '
+    "exist, newest/latest version, upload date, author, file type, page count.\n"
+    '- "multi_doc": the question asks to summarize or compare ACROSS several '
+    "documents.\n\n"
+    'Reply with JSON only: {"intent": "text"} or {"intent": "visual"} or '
+    '{"intent": "metadata"} or {"intent": "multi_doc"}.\n\n'
+    "Examples:\n"
+    'Q: Wie lang müssen Passwörter mindestens sein? -> {"intent": "text"}\n'
+    'Q: Welche Werte stehen in der Tabelle der Notfallkontakte? -> {"intent": "text"}\n'
+    'Q: When must a security incident be reported? -> {"intent": "text"}\n'
+    'Q: Was zeigt das Balkendiagramm auf Seite 3? -> {"intent": "visual"}\n'
+    'Q: Which quarter has the highest bar in the revenue chart? -> {"intent": "visual"}\n'
+    'Q: Was steht auf dem gescannten Formular? -> {"intent": "visual"}\n'
+    'Q: Welches ist die neueste Version der IT-Richtlinie? -> {"intent": "metadata"}\n'
+    'Q: Who uploaded the quarterly report, and when? -> {"intent": "metadata"}\n'
+    'Q: Wie viele Seiten hat der Arbeitsvertrag? -> {"intent": "metadata"}\n'
+    'Q: Vergleiche die Urlaubsregelungen in den beiden Vereinbarungen. -> {"intent": "multi_doc"}\n'
+    'Q: Summarize all security policies. -> {"intent": "multi_doc"}\n'
+    'Q: Compare the notice periods across all contracts. -> {"intent": "multi_doc"}'
+)
+
 PLANNER_SYSTEM = (
     "Break the question into at most 3 concrete retrieval sub-steps. "
     'Reply with JSON only: {"steps": ["...", "..."]}.'
