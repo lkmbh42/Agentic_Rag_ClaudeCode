@@ -58,3 +58,17 @@ Phase 2 adds one entry to the manifest:
 | Role | Model | Serving | Pin |
 |---|---|---|---|
 | Layout + TableFormer (Docling) | `ds4sd/docling-models` | in-process (worker), staged via `scripts/stage-docling-models.sh` → `DOCLING_ARTIFACTS_PATH` | `<HF_REVISION_HASH>` (operator; script warns loudly when unpinned — dev-only) |
+
+### Phase 4 — answer-model configurations (operator decision, ratified at the Phase 4 gate)
+
+The serving stack is fully env-parameterized; which answer model runs is a `.env`
+decision on the GPU host, not a code change:
+
+| Configuration | Model | VRAM | Status |
+|---|---|---|---|
+| **ADR default (24 GB)** | `Qwen/Qwen2.5-7B-Instruct-AWQ` (text) + `LLM_MULTIMODAL=false` — visual questions answer from pre-computed captions (ADR 0.3: zero query-time VLM calls) | ≈21 GB resident incl. embeddings | active default |
+| CLAUDE.md manifest (≥48 GB) | `Qwen/Qwen2.5-VL-32B-Instruct-AWQ` + `LLM_MULTIMODAL=true` — mixed text+image context per Phase 4; router/graders move to a second small vLLM (two-vLLM topology, ADR 0.5 tuning note) | does NOT fit 24 GB | documented overlay in `.env.example` |
+
+Both models get `<HF_REVISION_HASH>` pins at provisioning like every other model.
+Whatever model serves generation must pass the golden text subset ≥ Phase 1 score
+BEFORE go-live (CLAUDE.md Phase 4 task 1 parity gate — GPU-host step).
