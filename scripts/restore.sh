@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Restore PostgreSQL + Qdrant from a backup dir to a mutually-consistent state.
-# The app tier is stopped during restore so no writes interleave.
+# Restore PostgreSQL + Qdrant + MinIO from a backup dir to a mutually-consistent
+# state. The app tier is stopped during restore so no writes interleave.
 #
 #   bash scripts/restore.sh <backup_dir>
 set -euo pipefail
@@ -23,6 +23,19 @@ for f in "$DIR"/qdrant_*.snapshot; do
     -F "snapshot=@$f" >/dev/null
   echo "   recovered $c"
 done
+
+if [ -f "$DIR/minio.tar" ]; then
+  echo ">> Restoring MinIO objects (figures + pages)"
+  $COMPOSE exec -T minio sh -c '
+    mc alias set local http://localhost:9000 "${MINIO_ROOT_USER:-minioadmin}" "${MINIO_ROOT_PASSWORD:-minioadmin-dev-only}" >/dev/null 2>&1
+    rm -rf /tmp/minio_restore && mkdir -p /tmp/minio_restore
+    tar -C /tmp/minio_restore -xf -
+    for b in figures pages; do
+      mc mb --ignore-existing "local/$b" >/dev/null 2>&1 || true
+      [ -d "/tmp/minio_restore/$b" ] && mc mirror --quiet --overwrite "/tmp/minio_restore/$b" "local/$b" >/dev/null 2>&1 || true
+    done
+  ' < "$DIR/minio.tar" && echo "   recovered figures + pages"
+fi
 
 echo ">> Restarting app tier"
 $COMPOSE start backend worker >/dev/null

@@ -21,11 +21,18 @@ x-common-env: &common-env
 x-restart: &restart
   restart: unless-stopped
 
+# Container hardening (Phase 5 §3). All service images already run as a non-root
+# uid (see docker/*.Dockerfile). `no-new-privileges` blocks setuid escalation in
+# every service; applied via merge on each service below.
+x-hardening: &hardening
+  security_opt:
+    - no-new-privileges:true
+
 services:
   # --------------------------------------------------------------------- data
   postgres:
     image: postgres:16-alpine@sha256:e013e867e712fec275706a6c51c966f0bb0c93cfa8f51000f85a15f9865a28cb
-    <<: *restart
+    <<: [*restart, *hardening]
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -40,7 +47,7 @@ services:
 
   redis:
     image: redis:7-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99
-    <<: *restart
+    <<: [*restart, *hardening]
     command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
     volumes: ["redis_data:/data"]
     healthcheck:
@@ -52,7 +59,7 @@ services:
 
   qdrant:
     image: qdrant/qdrant:v1.12.4@sha256:241edb9d7778327516ef218f8c74e1bd61b5ea42cd4f193cb8d0896199705636
-    <<: *restart
+    <<: [*restart, *hardening]
     volumes: ["qdrant_data:/qdrant/storage"]
     healthcheck:
       test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/6333' || exit 1"]
@@ -63,7 +70,7 @@ services:
 
   phoenix:
     image: arizephoenix/phoenix:latest@sha256:45a2dbd623d12f9924dc3d554a3f35574764541d7375d081787f0e06e4d3f2fa
-    <<: *restart
+    <<: [*restart, *hardening]
     volumes: ["phoenix_data:/mnt/data"]
     environment:
       PHOENIX_WORKING_DIR: /mnt/data
@@ -80,7 +87,7 @@ services:
     # (docs/PINS.md). INTERNAL NETWORK ONLY — no host ports; access is always
     # gateway-proxied with ACL checks (Rule 5). SSE-S3 via built-in KMS key.
     image: minio/minio:RELEASE.2025-04-22T22-12-26Z@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e
-    <<: *restart
+    <<: [*restart, *hardening]
     command: ["server", "/data"]
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
@@ -103,7 +110,7 @@ services:
     # Digest-pinned (docs/PINS.md; resolved 2026-07-02). Update = new digest in
     # PINS.md + eval gate re-run (see model update procedure, Phase 5 runbook).
     image: vllm/vllm-openai:latest@sha256:251eba5cc7c12fed0b75da22a9240e582b1c9e39f6fbc064f86781b963bd814f
-    <<: *restart
+    <<: [*restart, *hardening]
     # IPC/shm: vLLM needs ample shared memory or it crashes under concurrency.
     ipc: host
     shm_size: "8gb"
@@ -140,7 +147,7 @@ services:
       dockerfile: docker/embeddings.Dockerfile
       args:
         INSTALL_MODELS: "true"   # build the real BGE-M3 + reranker image
-    <<: *common-env
+    <<: [*common-env, *hardening]
     environment:
       EMBEDDINGS_DEVICE: cuda    # BGE-M3 + reranker on GPU
       EMBEDDINGS_IMPLEMENTED: "true"
@@ -166,7 +173,7 @@ services:
     build:
       context: .
       dockerfile: docker/vlm.Dockerfile
-    <<: *common-env
+    <<: [*common-env, *hardening]
     # CPU only by design (ADR 0.3): keeps the 24 GB GPU free for interactive load.
     environment:
       VLM_DEVICE: cpu
@@ -187,7 +194,7 @@ services:
     build:
       context: .
       dockerfile: docker/colqwen.Dockerfile
-    <<: *common-env
+    <<: [*common-env, *hardening]
     # GPU at query + ingest (late-interaction page retrieval). Stub build runs
     # CPU; the real model build sets COLQWEN_IMPLEMENTED=true and needs a GPU.
     environment:
@@ -216,7 +223,7 @@ services:
     build:
       context: .
       dockerfile: docker/backend.Dockerfile
-    <<: [*common-env, *restart]
+    <<: [*common-env, *restart, *hardening]
     environment:
       LLM_BACKEND: vllm
       LLM_BASE_URL: ${LLM_BASE_URL:-http://vllm:8000/v1}
@@ -246,7 +253,7 @@ services:
     build:
       context: .
       dockerfile: docker/backend.Dockerfile
-    <<: [*common-env, *restart]
+    <<: [*common-env, *restart, *hardening]
     command: ["python", "-m", "worker.main"]
     environment:
       WORKER_HEARTBEAT_PATH: /tmp/worker_heartbeat
@@ -277,7 +284,7 @@ services:
     build:
       context: .
       dockerfile: docker/admin-ui.Dockerfile
-    <<: *restart
+    <<: [*restart, *hardening]
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/healthz || exit 1"]
       interval: 15s
@@ -287,7 +294,7 @@ services:
 
   proxy:
     image: nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
-    <<: *restart
+    <<: [*restart, *hardening]
     ports:
       - "${PROXY_HTTP_PORT:-80}:80"
     volumes:
@@ -305,7 +312,7 @@ services:
   # --- Observability (Phase 5). Internal-only; not exposed through the proxy.
   prometheus:
     image: prom/prometheus:v2.54.1@sha256:f6639335d34a77d9d9db382b92eeb7fc00934be8eae81dbc03b31cfe90411a94
-    <<: *restart
+    <<: [*restart, *hardening]
     volumes:
       - ./ops/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./ops/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
@@ -315,7 +322,7 @@ services:
 
   grafana:
     image: grafana/grafana:11.2.0@sha256:408afb9726de5122b00a2576763a8a57a3c86d5b0eff5305bc994ceb3eb96c3f
-    <<: *restart
+    <<: [*restart, *hardening]
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
       GF_USERS_ALLOW_SIGN_UP: "false"
