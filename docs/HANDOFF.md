@@ -153,7 +153,7 @@ Decisions needing operator ratification at this gate:
   2. copy assets in (only `./app`, `./worker` are bind-mounted): `for f in tests services eval pytest.ini scripts alembic alembic.ini; do docker compose -f docker-compose.dev.yml cp $f backend:/srv/$f; done`
      — if `/srv/tests` already exists, `cp` NESTS it; remove first as root: `exec -T -u root backend sh -c "rm -rf /srv/tests"`.
   3. `docker compose -f docker-compose.dev.yml exec -T backend python -m pytest -q`
-     (full = 196 tests; `-m "not docling and not llm"` = 182 fast; marker `docling` =
+     (full = 183 tests; `-m "not docling and not llm"` = 169 fast; marker `docling` =
      13 slow layout tests; marker `llm` = the router accuracy gate, 72 real LLM calls,
      ~4 min on the dev CPU).
 - After changing `requirements*.txt` or the Dockerfile: rebuild (`docker compose -f

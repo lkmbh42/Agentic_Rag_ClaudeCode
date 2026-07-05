@@ -62,7 +62,7 @@ structlog==24.*
 pymupdf>=1.24,<2          # PDF text/images/render (bundles libs; no poppler needed)
 pdfplumber==0.11.*        # PDF table extraction
 pytesseract==0.3.*        # OCR (needs the tesseract-ocr binary, installed in image)
-Pillow>=10,<12
+Pillow>=12.2,<13         # >=12.2 clears the 11.x image-parsing CVEs (Phase 5 pip-audit); docling-core allows <13
 python-docx==1.1.*
 openpyxl==3.1.*
 beautifulsoup4==4.12.*
