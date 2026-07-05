@@ -12,9 +12,9 @@ Last updated: 2026-07-04 (Phase 4 gate) · Branch: `feat/multimodal-migration` �
 
 1. `git log --oneline -15` and read `docs/CHANGELOG.md`.
 2. Confirm clean tree on `feat/multimodal-migration`.
-3. **Phase 3 APPROVED 2026-07-04.** **Phase 4 is CODE-COMPLETE and committed but
-   NOT approved.** Present the Phase 4 gate (section 4 below) and STOP. Do
-   **not** start Phase 5 until the operator writes exactly `PHASE 4 APPROVED`.
+3. **Phase 4 APPROVED 2026-07-05** (decisions 1–3 incl. the ADR-default serving
+   configuration ratified). **Phase 5 is in progress** — see section 6 and
+   CLAUDE.md Phase 5; check `git log` + `docs/CHANGELOG.md` for what is done.
 4. Do not re-do finished work. Everything is committed; verify, don't rebuild.
 
 ---
@@ -51,8 +51,8 @@ Non-negotiable rules that keep biting if forgotten:
 | 1 — Ollama→vLLM serving (text parity) | ✅ DONE, **APPROVED** 2026-07-03 | dev-Ollama hardware exception accepted |
 | 2 — Multimodal ingestion pipeline | ✅ DONE, **APPROVED** 2026-07-04 | operator wrote PHASE 2 APPROVED (decisions 1–3 + GPU deferrals ratified) |
 | 3 — Visual retrieval & fusion | ✅ DONE, **APPROVED** 2026-07-04 | operator wrote PHASE 3 APPROVED (decisions 1–4 + GPU deferrals ratified) |
-| 4 — VLM answering & frontend | ✅ **CODE-COMPLETE, awaiting gate** | **needs PHASE 4 APPROVED** |
-| 5 — Scale, security & cutover | ⏳ NEXT (do not start yet) | — |
+| 4 — VLM answering & frontend | ✅ DONE, **APPROVED** 2026-07-05 | operator wrote PHASE 4 APPROVED (ADR-default serving + [n] protocol + GPU deferrals ratified) |
+| 5 — Scale, security & cutover | 🔨 IN PROGRESS (started 2026-07-05) | ends with "MIGRATION ACCEPTED" |
 
 ---
 

@@ -1,6 +1,12 @@
 # CHANGELOG — Multimodal RAG Migration
 
-## Phase 4 — VLM answering & frontend (code-complete, awaiting gate, 2026-07-04)
+## Phase 4 — VLM answering & frontend (gate: "PHASE 4 APPROVED", 2026-07-05)
+
+> Gate ratified: (1) ADR-default serving stays active (text 7B-AWQ on 24 GB,
+> LLM_MULTIMODAL=false; VL-32B remains the documented ≥48 GB overlay),
+> (2) [n] citation protocol with UI-rendered "doc · Seite N" chips,
+> (3) GPU deferrals (visual correctness, 20-stream stability, prod parity,
+> sampled citation accuracy).
 
 **Measured (dev host, text subset, 100 cases, judge on, 0 errors —
 `eval/reports/phase4_text.md`):** judge correctness **43.9%** ≥ 42.1% baseline ✅
