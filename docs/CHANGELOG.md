@@ -1,5 +1,38 @@
 # CHANGELOG — Multimodal RAG Migration
 
+## Phase 5 — Scale, security & cutover (in progress, 2026-07-05)
+
+- **ACL red-team (task 3, headline DoD):** `scripts/redteam_acl.py` provisions two
+  isolated tenants and, as tenant A, probes EVERY retrieval path against tenant B —
+  text search, visual pages, semantic cache, `/media` (MinIO), metadata lookup, plus
+  direct-object access. **Live run: 9/9 probes denied, zero bypasses**
+  (`eval/reports/phase5_redteam.md`); exits non-zero on any leak (re-runnable at cutover).
+- **Global admission control (task 2):** a cap on concurrent in-flight chat turns across
+  ALL users (`global_max_inflight`, Redis-backed), friendly 429 + `Retry-After` when
+  saturated; the rejection never leaks a per-user in-flight slot (tested). Per-user
+  quotas already existed.
+- **Audit-log completeness (task 3):** GENERATION entries now carry the query, the
+  retrieved document ids, and an `answer_sha256` (answer hashed, not stored) — one helper,
+  both chat endpoints.
+- **Observability (task 4):** `/metrics` exposes real `rag_*` Prometheus series — a latency
+  Histogram + cache Counter that accumulate per turn, and live gauges (queue depth, indexing
+  backlog, global in-flight) refreshed at scrape. `ops/` ships the Prometheus scrape config,
+  alert rules (backend-down, vLLM-down, chat P95>8s, admission saturated, ingest backlog),
+  and a Grafana dashboard JSON. Prod compose gains pinned `prometheus` + `grafana` (PINS.md).
+- **Security pass (task 3):** `npm audit` clean; `pip-audit` found 26 CVEs in 6 packages —
+  triaged by exploitability in the air-gapped, JWT-only deployment and recorded with a
+  remediation plan (`eval/reports/phase5_security.md`) rather than silently bumping the
+  major-version langgraph/starlette fixes on a gated system. The low-risk **pillow
+  11.3→12.2** bump (clears 6 image-parsing CVEs; docling-core allows `<13`) was applied.
+  Container hardening: `no-new-privileges` on all 13 prod services (already non-root).
+- **Backup/restore + runbook (tasks 5/6):** `backup.sh`/`restore.sh` now cover the third
+  store (MinIO figures+pages via `mc mirror` → `minio.tar`) alongside Postgres + Qdrant;
+  `docs/RUNBOOK.md` documents start/stop, eval-gated model update, re-ingestion,
+  tested backup/restore + RTO, provisioning, a common-failures table, and security ops.
+- **Load test (task 1):** `loadtest.py --scenario mixed` runs 50 concurrent text+visual
+  chat sessions with per-modality P95 gates (text ≤8s, visual ≤12s). The actual 50-user
+  run + 30-min soak is a GPU-host step (flagged).
+
 ## Phase 4 — VLM answering & frontend (gate: "PHASE 4 APPROVED", 2026-07-05)
 
 > Gate ratified: (1) ADR-default serving stays active (text 7B-AWQ on 24 GB,

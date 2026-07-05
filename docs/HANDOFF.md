@@ -4,7 +4,7 @@
 > `CLAUDE.md` (repo root) is the governing spec — its OPERATING RULES and phase
 > gates are non-negotiable. This file records where we are inside that plan.
 
-Last updated: 2026-07-04 (Phase 4 gate) · Branch: `feat/multimodal-migration` · HEAD at handoff: `cdc4922`
+Last updated: 2026-07-05 (Phase 5 gate) · Branch: `feat/multimodal-migration` · HEAD at handoff: `4e44771`
 
 ---
 
@@ -12,10 +12,14 @@ Last updated: 2026-07-04 (Phase 4 gate) · Branch: `feat/multimodal-migration` �
 
 1. `git log --oneline -15` and read `docs/CHANGELOG.md`.
 2. Confirm clean tree on `feat/multimodal-migration`.
-3. **Phase 4 APPROVED 2026-07-05** (decisions 1–3 incl. the ADR-default serving
-   configuration ratified). **Phase 5 is in progress** — see section 6 and
-   CLAUDE.md Phase 5; check `git log` + `docs/CHANGELOG.md` for what is done.
+3. **Phase 4 APPROVED 2026-07-05.** **Phase 5 is CODE-COMPLETE and committed but
+   NOT approved.** Present the Phase 5 gate (section 4 below) and STOP. Phase 5
+   is the LAST phase — its gate is the operator writing **`MIGRATION ACCEPTED`**
+   after the pilot go/no-go. Do not declare the migration accepted yourself.
 4. Do not re-do finished work. Everything is committed; verify, don't rebuild.
+   ⚠️ NEVER `rm` a bind-mounted path from inside a container: dev compose mounts
+   `./app` and `./worker` at `/srv/app` `/srv/worker`, so `rm -rf /srv/app`
+   deletes the HOST source. Only remove copied assets (`/srv/tests`, `/srv/eval`).
 
 ---
 
@@ -52,41 +56,35 @@ Non-negotiable rules that keep biting if forgotten:
 | 2 — Multimodal ingestion pipeline | ✅ DONE, **APPROVED** 2026-07-04 | operator wrote PHASE 2 APPROVED (decisions 1–3 + GPU deferrals ratified) |
 | 3 — Visual retrieval & fusion | ✅ DONE, **APPROVED** 2026-07-04 | operator wrote PHASE 3 APPROVED (decisions 1–4 + GPU deferrals ratified) |
 | 4 — VLM answering & frontend | ✅ DONE, **APPROVED** 2026-07-05 | operator wrote PHASE 4 APPROVED (ADR-default serving + [n] protocol + GPU deferrals ratified) |
-| 5 — Scale, security & cutover | 🔨 IN PROGRESS (started 2026-07-05) | ends with "MIGRATION ACCEPTED" |
+| 5 — Scale, security & cutover | ✅ **CODE-COMPLETE, awaiting gate** | **needs "MIGRATION ACCEPTED"** (after pilot go/no-go) |
 
 ---
 
-## 3. What Phase 4 shipped (commits after the Phase 3 gate; Phase 3 map → CHANGELOG)
+## 3. What Phase 5 shipped (commits after the Phase 4 gate; earlier maps → CHANGELOG)
 
 ```
-e7db980 docs: record PHASE 3 APPROVED gate (2026-07-04), Phase 4 started
-f24fa23 multimodal generate + answer prompt contract (DE/EN)
-6827149 ACL-checked media endpoints — gateway-proxied MinIO images
-d215a2a message feedback — 👍/👎 + reason persisted per (message, user)
-1b8287f frontend — citation chips with doc+Seite, ACL thumbnails, feedback UI
-e4e25f4 config(phase4): answer-model serving — ADR 24GB default, documented VL overlay
+b60ea70 docs: record PHASE 4 APPROVED gate (2026-07-05), Phase 5 started
+752c59e admission control, audit completeness, Prometheus/Grafana observability
+ff23c51 MinIO backup/restore, RUNBOOK, mixed load scenario, container hardening
+4e44771 ACL red-team (zero bypasses) + dependency audit findings + pillow bump
 ```
 
-New/changed modules (Phase 2–3 module maps live in docs/CHANGELOG.md):
-- `app/llm/client.py` — `generate(..., images=[b64,...])` builds OpenAI content parts
-  (data URLs) for VL serving; plain string without images. `llm_multimodal` (config)
-  gates the whole image path; FALSE per ADR on 24 GB (visual answers come from
-  pre-computed captions), the ≥48 GB VL overlay flips it (.env.example + PINS.md).
-- `app/graph/prompts.py` — Phase 4 answer contract (DE/EN): context-only, no outside
-  documents, [n] citations, read-vs-estimated chart qualifier, uninterpreted-figure
-  honesty (ADR), refusal. CI-pinned by `tests/test_answer_contract.py`.
-- `app/api/media.py` (NEW) — `/media/pages/{doc}/{page}`, `/media/figures/{doc}/{fig}`:
-  JWT + collection ACL (404 semantics), gateway-proxied MinIO, never presigned.
-- `app/models/chat.py::MessageFeedback` + migration `a81f5c9e3b02` —
-  `POST /chat/messages/{id}/feedback` (up/down + reason, upsert per message+user,
-  ownership-enforced); both chat endpoints return `message_id`; session detail carries
-  the caller's rating.
-- `app/graph/citations.py` — citations now carry `image_uri` (figure crops) so the UI
-  can thumbnail them; retriever/graph propagate it.
-- `admin-ui/app/src/` — CitationChip (`[n] file.pdf · Seite N` + toggleable AuthThumb
-  through /media as blob URLs), FeedbackBar; `tsc --noEmit` clean.
-- `docker-compose.yml` — `LLM_MULTIMODAL` env (default false), `LLM_GEN/CLASS_MODEL`
-  overridable for the two-vLLM VL topology.
+New/changed modules (Phase 2–4 module maps live in docs/CHANGELOG.md):
+- `scripts/redteam_acl.py` (NEW) — provisions two tenants, probes every retrieval path
+  (text/visual/cache/media/metadata + direct-object) for cross-tenant leakage; exits
+  non-zero on any bypass. Report: `eval/reports/phase5_redteam.md` (9/9 denied).
+- `app/core/ratelimit.py` — `acquire/release_global_slot` + `rate_limit` now enforce a
+  global in-flight cap (friendly 429 + Retry-After); per-user quotas unchanged.
+- `app/api/chat.py::_generation_audit_detail` — GENERATION audit carries query,
+  retrieved doc ids, `answer_sha256` (both endpoints).
+- `app/observability/metrics.py` + `app/main.py` — real Prometheus objects (latency
+  Histogram, cache Counter, live gauges via `refresh_gauges` at scrape).
+- `ops/` (NEW) — `prometheus/prometheus.yml`, `prometheus/alerts.yml`,
+  `grafana/dashboard.json`. Prod compose gains pinned prometheus + grafana + an
+  `x-hardening` anchor (`no-new-privileges` on all 13 services; all already non-root).
+- `scripts/backup.sh` + `restore.sh` — now include MinIO (figures+pages) via `mc mirror`.
+- `scripts/loadtest.py` — `--scenario mixed` (50 concurrent text+visual, per-modality P95).
+- `docs/RUNBOOK.md` (NEW), `eval/reports/phase5_security.md` (NEW — audit triage).
 
 Key dependency facts (do not "fix"):
 - `docling==2.108.0` EXACT — the `2.15.*` range resolved an incompatible `docling-core` that
@@ -101,30 +99,46 @@ Key dependency facts (do not "fix"):
 
 ---
 
-## 4. Phase 4 DoD — gate checklist (present this, then wait)
+## 4. Phase 5 DoD — gate checklist (present this, then wait)
 
 | DoD item | Status | Evidence |
 |---|---|---|
-| Visual correctness ≥70% (judge) | ⚠️ **GPU-deferred (flagged)** | requires real captions (VLM) or query-time VL — both GPU-host; dev visual answers come from stub captions. Mechanism (fusion → assembler → contract) fully wired + tested |
-| Text ≥ baseline (judge) | ✅ **43.9% ≥ 42.1% baseline** (Phase 1: 45.4%, within documented judge noise); pass 68.0% = Phase 1; hit@5 75.0% | `eval/reports/phase4_text.md` (100 cases, judge on, 0 errors, 142 min dev CPU) |
-| Citation accuracy ≥90% (sampled) | ⚠️ dev proxy: citation→correct-doc **72.8%** (↑ from 71.7%); citation-present 87% (↓ from 95% — dev-3B soft-refusals/prose citations, mechanism intact); the human-sampled ≥90% check runs on the GPU host with the prod model | `eval/reports/phase4_text.md` |
-| Chart-value read-vs-estimated qualifier (prompt-contract test) | ✅ | `tests/test_answer_contract.py::test_contract_clauses_present_in_both_languages` (DE+EN clauses CI-pinned) |
-| Image URLs unreachable without valid JWT + ACL (CI security test) | ✅ | `tests/test_media.py` — 401 unauth, cross-scope 404, probe 404, authorized 200 |
-| Streaming stable under 20 concurrent streams | ⚠️ **GPU-deferred (flagged)** | SSE verified live with 3 concurrent streams on dev CPU (tokens + done + message_id, correct routes); 20-stream stability needs prod serving |
+| Load targets met on prod hardware; tuning documented | ⚠️ **GPU-deferred (flagged)** | `loadtest.py --scenario mixed` (50 concurrent text+visual, per-modality P95 gates ≤8s/≤12s) ready; the run + 30-min soak + vLLM tuning is a GPU-host step, like the Phase 1 load deferral |
+| Red-team finds zero ACL bypasses; report committed | ✅ **0 bypasses / 9 probes** | `scripts/redteam_acl.py` live run — `eval/reports/phase5_redteam.md` (text, visual, cache, media, metadata, direct-object) |
+| Dashboards + alerts live; restore test performed | ✅ artifacts / ⚠️ live-on-prod | `ops/` Prometheus scrape+alerts + Grafana dashboard committed; `/metrics` serves rag_* series (tested); prometheus+grafana in prod compose. Restore path scripted (Postgres+Qdrant+MinIO); **quarterly restore drill is a prod-host runbook step** |
+| Full corpus ingested; failure rate <2%, all triaged | ⚠️ **GPU/corpus-deferred** | bulk nightly ingest + sampling-report review is a prod-host provisioning step (no real corpus in the repo — AUDIT §8) |
+| Pilot feedback reviewed; go/no-go recorded | ⏳ **operator step** | feedback capture is live (`message_feedback` + eval mining); the 25-user 1-week pilot + go/no-go is the operator's |
+| Operator writes "MIGRATION ACCEPTED" | ⏳ | the terminal gate — after the pilot go/no-go |
+
+Additional security DoD (spec §3), all met on the dev stack:
+- **Rate limiting + admission control:** per-user quotas (existing) + global in-flight cap
+  with friendly 429 (`tests/test_ratelimit.py`).
+- **Audit completeness:** query + retrieved doc ids + answer hash on every GENERATION
+  (`tests/test_audit_completeness.py`).
+- **Dependency audit:** npm clean; pip-audit 26 CVEs triaged with a remediation plan
+  (`eval/reports/phase5_security.md`); pillow bumped.
+- **Container hardening:** non-root (already) + `no-new-privileges` on all 13 services.
 
 Decisions needing operator ratification at this gate:
-1. **Active answer-model configuration.** CLAUDE.md says swap to Qwen2.5-VL-32B-AWQ;
-   the ratified ADR VRAM budget (§0.5) shows it cannot fit the 24 GB host and §0.3
-   mandates zero query-time VLM calls there. Shipped: ADR default active (text 7B-AWQ,
-   `LLM_MULTIMODAL=false`, visual answers from pre-computed captions) + the VL-32B
-   `.env` overlay documented for ≥48 GB (PINS.md Phase 4 table). Ratify or direct
-   hardware growth.
-2. **Citation protocol stays [n], UI renders "doc · Seite N".** The spec's literal
-   `[doc, Seite N]` free-typed by the model would break the machine-verified
-   anti-fabrication guard (extract_citations maps [n] → packed context). The UI chip
-   shows exactly `file.pdf · Seite N` from verified metadata.
-3. **GPU deferrals** (visual correctness ≥70%, 20-stream stability, text parity of
-   whatever model serves prod) — same shape as every prior gate's deferrals.
+1. **Dependency-remediation posture.** pip-audit found 26 CVEs (pillow, starlette,
+   langgraph*). The low-risk pillow bump was applied; the starlette + langgraph fixes
+   are major-version jumps that would destabilize the gated system on the eve of
+   cutover, so they are recorded with a post-pilot patch-cycle plan
+   (`eval/reports/phase5_security.md`) rather than bumped now. Ratify the plan, or
+   direct an immediate coordinated bump + full re-gate.
+2. **GPU/prod-host deferrals** (50-user mixed load + soak + vLLM tuning, full-corpus
+   bulk ingest, quarterly restore drill, dashboards-live) — the accumulated
+   provisioning checklist below. Same deferral shape accepted at every prior gate.
+3. **Pilot go/no-go is yours.** Everything the pilot needs is in place (feedback loop,
+   observability, admission control, ACL-clean). The 25-user week and the
+   `MIGRATION ACCEPTED` decision are operator actions, not mine to declare.
+
+### GPU-host / provisioning checklist (accumulated across all phases — run before GA)
+- Phase 1: vLLM text parity + 50-user load (P95 < 8s).
+- Phase 2: caption quality ≥85% + real-corpus 3-of-each volume run.
+- Phase 3: visual hit@5 ≥75% (`run_eval.py --retrieval-only`) + router p95 ≤400 ms (`router_report.py`).
+- Phase 4: served-model text parity ≥ Phase 1, visual correctness ≥70%, 20-stream stability, sampled citation ≥90%.
+- Phase 5: 50-user mixed load + 30-min soak + vLLM tuning; full-corpus bulk ingest (<2% failures); quarterly restore drill; fill all `<HF_REVISION_HASH>` pins.
 
 ---
 
@@ -139,7 +153,7 @@ Decisions needing operator ratification at this gate:
   2. copy assets in (only `./app`, `./worker` are bind-mounted): `for f in tests services eval pytest.ini scripts alembic alembic.ini; do docker compose -f docker-compose.dev.yml cp $f backend:/srv/$f; done`
      — if `/srv/tests` already exists, `cp` NESTS it; remove first as root: `exec -T -u root backend sh -c "rm -rf /srv/tests"`.
   3. `docker compose -f docker-compose.dev.yml exec -T backend python -m pytest -q`
-     (full = 178 tests; `-m "not docling and not llm"` = 164 fast; marker `docling` =
+     (full = 196 tests; `-m "not docling and not llm"` = 182 fast; marker `docling` =
      13 slow layout tests; marker `llm` = the router accuracy gate, 72 real LLM calls,
      ~4 min on the dev CPU).
 - After changing `requirements*.txt` or the Dockerfile: rebuild (`docker compose -f
@@ -155,27 +169,21 @@ Decisions needing operator ratification at this gate:
 
 ---
 
-## 6. Phase 5 preview (start ONLY after PHASE 4 APPROVED)
+## 6. After PHASE 5 → the terminal gate
 
-Per CLAUDE.md Phase 5 — scale, security & cutover:
-1. Load test on prod hardware: 50 concurrent mixed sessions; P95 ≤12 s visual / ≤8 s
-   text; 30-min soak, zero OOM; tune vLLM knobs and document values.
-2. Rate limiting per user + global admission control (429 UI state).
-3. Security pass: ACL red-team script across EVERY path — text, visual (docs_pages),
-   cache (scope-hash), MinIO (/media), metadata lookup; `acl_audit.py` is reusable;
-   pip-audit/npm audit; container hardening; audit log completeness.
-4. Observability: Prometheus + Grafana dashboards committed, alert rules.
-5. Backup/restore runbooks incl. Qdrant snapshots + MinIO; tested restore.
-6. `docs/RUNBOOK.md`, bulk corpus ingest, 25-user pilot → GA.
+Phase 5 is the LAST build phase. There is no Phase 6: the migration is complete
+when the operator writes **`MIGRATION ACCEPTED`** after the 25-user pilot go/no-go.
+Everything the pilot needs is in place (feedback loop, observability, admission
+control, ACL-clean red-team). Remaining work before GA is the operator's
+provisioning + pilot, tracked by the GPU-host checklist in section 4.
 
-GPU-host checklist accumulated across gates (run at provisioning, before pilot):
-Phase 1 vLLM parity + 50-user load · Phase 2 caption quality ≥85% + real-corpus
-volume run · Phase 3 visual hit@5 ≥75% (`run_eval.py --retrieval-only`) + router
-p95 ≤400 ms (`router_report.py`) · Phase 4 text parity of the served model, visual
-correctness ≥70%, 20-stream stability, sampled citation accuracy ≥90%.
+If asked to "deploy on the server", the dev→prod switch is memory
+[[agentic-rag-server-deploy-trigger]]: 24 GB-GPU config (vLLM + BGE-M3, re-index,
+revert dev downgrades), then walk the section-4 GPU-host checklist.
 
 Deferred observations still parked (AUDIT.md §11): chat per-turn state reset, SSE
-circuit breaker, upload size cap. Baseline to beat lives in `eval/reports/baseline.md`.
+circuit breaker, upload size cap (the last is also the interim mitigation for the
+starlette CVEs — see `eval/reports/phase5_security.md`). Baseline: `eval/reports/baseline.md`.
 
 ---
 
