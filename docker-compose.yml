@@ -302,6 +302,31 @@ services:
       retries: 5
       start_period: 10s
 
+  # --- Observability (Phase 5). Internal-only; not exposed through the proxy.
+  prometheus:
+    image: prom/prometheus:v2.54.1@sha256:f6639335d34a77d9d9db382b92eeb7fc00934be8eae81dbc03b31cfe90411a94
+    <<: *restart
+    volumes:
+      - ./ops/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./ops/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      backend: {condition: service_healthy}
+
+  grafana:
+    image: grafana/grafana:11.2.0@sha256:408afb9726de5122b00a2576763a8a57a3c86d5b0eff5305bc994ceb3eb96c3f
+    <<: *restart
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - ./ops/grafana:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      prometheus: {condition: service_started}
+
 volumes:
   postgres_data:
   redis_data:
@@ -309,3 +334,5 @@ volumes:
   phoenix_data:
   documents_data:
   minio_data:
+  prometheus_data:
+  grafana_data:

@@ -40,6 +40,8 @@ scheduled with the first CI setup).
 | `ollama/ollama:latest` | compose (dev) | `sha256:f1a705f2bd113fb8d15f85f7c217f0dc5f6bebda6b0cc42b82c3ad165ffcb9dc` | ✅ pinned; ⚠️ service KEPT in dev (CPU-only dev host — flagged Phase 1 gate deviation; prod has no Ollama) |
 | `nginx:1.27-alpine` | compose (prod) + `docker/admin-ui.Dockerfile` | `sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10` | ✅ pinned in compose; Dockerfile ref recorded-only |
 | `minio/minio:RELEASE.2025-04-22T22-12-26Z` | compose (prod+dev), NEW in Phase 2 | `sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e` | ✅ pinned from first use (resolved 2026-07-03) |
+| `prom/prometheus:v2.54.1` | compose (prod), NEW in Phase 5 | `sha256:f6639335d34a77d9d9db382b92eeb7fc00934be8eae81dbc03b31cfe90411a94` | ✅ pinned from first use (resolved 2026-07-05) |
+| `grafana/grafana:11.2.0` | compose (prod), NEW in Phase 5 | `sha256:408afb9726de5122b00a2576763a8a57a3c86d5b0eff5305bc994ceb3eb96c3f` | ✅ pinned from first use (resolved 2026-07-05) |
 | `python:3.11-slim` | `docker/{backend,embeddings,vlm}.Dockerfile` | `sha256:b27df5841f3355e9473f9a516d38a6783b6c8dfeacaf2d14a240f443b368ddb6` | recorded-only (CI setup applies) |
 | `node:20-alpine` | `docker/admin-ui.Dockerfile` (build stage) | `sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293` | recorded-only (CI setup applies) |
 

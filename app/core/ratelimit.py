@@ -62,11 +62,45 @@ async def release_inflight(user_id: uuid.UUID) -> None:
         await client.set(key, 0)
 
 
+_GLOBAL_INFLIGHT = "admission:inflight:global"
+
+
+async def acquire_global_slot() -> None:
+    """Global admission control (Phase 5): bound concurrent in-flight turns
+    across ALL users so a burst can't overrun the vLLM queue. Friendly 429 with
+    Retry-After when the system is saturated."""
+    client = get_redis()
+    current = await client.incr(_GLOBAL_INFLIGHT)
+    await client.expire(_GLOBAL_INFLIGHT, _INFLIGHT_TTL)
+    if current > _settings.global_max_inflight:
+        await client.decr(_GLOBAL_INFLIGHT)
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="The assistant is at capacity right now — please retry in a moment.",
+            headers={"Retry-After": "5"},
+        )
+
+
+async def release_global_slot() -> None:
+    client = get_redis()
+    if await client.decr(_GLOBAL_INFLIGHT) < 0:
+        await client.set(_GLOBAL_INFLIGHT, 0)
+
+
 async def rate_limit(user: User = Depends(get_current_user)) -> AsyncIterator[User]:
-    """FastAPI dependency: enforce quotas, release the in-flight slot on exit."""
+    """FastAPI dependency: enforce per-user quotas AND global admission control,
+    releasing both slots on exit. Order matters — the global slot is acquired
+    last and released first so a global-cap rejection never consumes a per-user
+    slot, and neither slot leaks on the 429 path."""
     await check_request_rate(user.id)
     await acquire_inflight(user.id)
     try:
+        await acquire_global_slot()
+    except HTTPException:
+        await release_inflight(user.id)
+        raise
+    try:
         yield user
     finally:
+        await release_global_slot()
         await release_inflight(user.id)

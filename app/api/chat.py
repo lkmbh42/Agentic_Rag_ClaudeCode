@@ -55,6 +55,28 @@ def _require_llm_backend() -> None:
         )
 
 
+def _generation_audit_detail(result: dict, request_id: str, *, streamed: bool = False) -> dict:
+    """Audit detail for a GENERATION event (Phase 5 §3: the audit log must cover
+    the query, the retrieved document ids, and an answer hash). The answer is
+    hashed, not stored, so the tamper-evident trail never duplicates message
+    content (which lives in chat_messages) or bloats the audit table."""
+    import hashlib
+
+    chunks = result.get("chunks", [])
+    retrieved = sorted({c.get("document_id") for c in chunks if c.get("document_id")})
+    answer = result.get("answer", "") or ""
+    return {
+        "request_id": request_id,
+        "route": result.get("route"),
+        "cache_hit": result.get("cache_hit", False),
+        "insufficient": result.get("insufficient", False),
+        "streamed": streamed,
+        "query": result.get("query", ""),
+        "retrieved_document_ids": retrieved,
+        "answer_sha256": hashlib.sha256(answer.encode("utf-8")).hexdigest(),
+    }
+
+
 async def _owned_session(
     session_id: uuid.UUID, user: User, db: AsyncSession
 ) -> ChatSession:
@@ -119,8 +141,7 @@ async def chat(
     await record_audit(
         db, action=AuditAction.GENERATION, user_id=user.id,
         resource_type="chat_session", resource_id=str(session.id),
-        detail={"request_id": request_id, "route": result.get("route"),
-                "cache_hit": result.get("cache_hit", False)},
+        detail=_generation_audit_detail(result, request_id),
     )
     await db.commit()
 
@@ -213,8 +234,7 @@ async def chat_stream(
         await record_audit(
             db, action=AuditAction.GENERATION, user_id=user.id,
             resource_type="chat_session", resource_id=str(session_id),
-            detail={"request_id": request_id, "route": final_state.get("route"),
-                    "cache_hit": final_state.get("cache_hit", False), "streamed": True},
+            detail=_generation_audit_detail(final_state, request_id, streamed=True),
         )
         await db.commit()
         metrics.record_latency(total_ms)

@@ -170,6 +170,10 @@ class Settings(BaseSettings):
     per_user_max_inflight: int = 3
     per_user_requests_per_min: int = 60
     per_user_tokens_per_min: int = 20000
+    # Phase 5 global admission control: a cap on concurrent in-flight chat turns
+    # across ALL users, so a burst can't exhaust the vLLM queue / GPU. Sized to
+    # the vLLM --max-num-seqs (48) with headroom; env-tuned on the prod host.
+    global_max_inflight: int = 40
 
     # --- derived connection strings ---
     @computed_field  # type: ignore[prop-decorator]

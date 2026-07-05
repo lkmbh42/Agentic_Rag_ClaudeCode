@@ -84,10 +84,13 @@ async def root() -> dict:
 
 
 @app.get("/metrics", response_class=PlainTextResponse)
-async def metrics() -> PlainTextResponse:
-    """Prometheus exposition. Operational gauges (queue depth, vLLM queue wait,
-    indexing backlog, cache hit rate, latency percentiles) are registered as
-    they come online in Phase 7."""
+async def metrics(db: AsyncSession = Depends(get_db)) -> PlainTextResponse:
+    """Prometheus exposition. Request-scoped signals (latency histogram, cache
+    counters) accumulate as turns run; live gauges (queue depth, indexing
+    backlog, global in-flight) are refreshed here at scrape time."""
+    from app.observability import metrics as _metrics
+
+    await _metrics.refresh_gauges(db)
     return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 

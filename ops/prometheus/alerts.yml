@@ -1,0 +1,49 @@
+# Alert rules (Phase 5 DoD: "alert rules for backend-down and P95 breach").
+groups:
+  - name: rag-availability
+    rules:
+      - alert: BackendDown
+        expr: up{job="backend"} == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "RAG backend is down"
+          description: "Prometheus cannot scrape backend:8000 for >1m."
+
+      - alert: VLLMDown
+        expr: up{job="vllm"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "vLLM serving is down"
+          description: "The answer model backend is unreachable for >2m; /chat returns 503."
+
+  - name: rag-latency
+    rules:
+      # P95 end-to-end chat latency over 5m breaches the 8s text target
+      # (CLAUDE.md Phase 5). histogram_quantile over the app's Histogram.
+      - alert: ChatP95LatencyBreach
+        expr: histogram_quantile(0.95, sum(rate(rag_chat_request_duration_seconds_bucket[5m])) by (le)) > 8
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "Chat P95 latency > 8s"
+          description: "5-minute P95 end-to-end chat latency exceeds the 8s target."
+
+  - name: rag-saturation
+    rules:
+      - alert: AdmissionControlSaturated
+        expr: rag_global_inflight >= 40
+        for: 3m
+        labels: {severity: warning}
+        annotations:
+          summary: "Global admission control saturated"
+          description: "In-flight chat turns at the global cap for >3m; users see 429s. Scale or raise GLOBAL_MAX_INFLIGHT."
+
+      - alert: IngestionBacklogGrowing
+        expr: rag_indexing_backlog > 500
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "Ingestion backlog > 500 docs"
+          description: "CPU captioning/indexing is falling behind (ADR: monitored, not user-facing)."
