@@ -23,8 +23,14 @@ RUN if [ "$INSTALL_MODELS" = "true" ]; then \
 COPY services/embeddings/ ./services/embeddings/
 
 RUN useradd --create-home --uid 10002 appuser \
-    && chown -R appuser:appuser /srv
+    && chown -R appuser:appuser /srv \
+    # Pre-create the HF cache dir owned by appuser so a mounted named volume
+    # (dev real-embedder mode) inherits writable ownership on first init —
+    # otherwise BGE-M3 download fails with PermissionError on the root-owned mount.
+    && mkdir -p /home/appuser/.cache/huggingface \
+    && chown -R appuser:appuser /home/appuser/.cache
 USER appuser
+ENV HF_HOME=/home/appuser/.cache/huggingface
 
 EXPOSE 8001
 

@@ -6,3 +6,8 @@ uvicorn[standard]==0.32.*
 pydantic==2.*
 FlagEmbedding==1.3.*
 torch==2.4.*
+# transformers MUST be pinned: FlagEmbedding 1.3 leaves it unpinned, so it
+# floated to 5.x, whose tensor_parallel.py references torch before importing it
+# ("NameError: name 'torch' is not defined") and is incompatible with torch 2.4.
+# 4.46.* is the last line verified working with BGE-M3 + torch 2.4.
+transformers==4.46.*
