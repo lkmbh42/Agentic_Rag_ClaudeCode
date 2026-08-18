@@ -4,12 +4,15 @@ Runs Qwen2.5-VL-7B (CPU at ingest, off-peak batch per ADR 0.3) to caption
 cropped figures for retrieval. Called only by the worker during ingestion,
 never on the query path.
 
-Two modes:
-- `VLM_IMPLEMENTED=true` (prod GPU host): loads the model, captions real images.
-- default (dev/CPU): a deterministic STUB returning a clearly-labelled
-  placeholder caption with 200, so the ingestion pipeline is exercised
-  end-to-end without a GPU. The "[STUB-Caption]" marker makes it impossible to
-  mistake for a real caption during eval.
+Backends (`VLM_BACKEND`):
+- `stub` (default, dev/CPU): a deterministic, clearly-labelled placeholder
+  ("[STUB-Caption]") so the ingestion pipeline is exercised without a model.
+- `transformers` (prod GPU host): loads the HF model (Qwen2.5-VL) in-process.
+- `openai`: captions via any OpenAI-compatible vision endpoint (e.g. a local
+  Ollama vision model at http://ollama:11434/v1). Lets a quantized VL model run
+  on a CPU host — the practical "real captions without a GPU" path.
+For backward compatibility, `VLM_IMPLEMENTED=true` (with no explicit backend)
+selects `transformers`.
 
 Contract (`POST /caption`): `{image_b64, kind, page}` -> `{caption, model, stub}`.
 `/summarize` is kept as a backward-compatible alias.
@@ -27,6 +30,12 @@ from pydantic import BaseModel
 MODEL = os.environ.get("VLM_MODEL", "Qwen/Qwen2.5-VL-7B-Instruct")
 DEVICE = os.environ.get("VLM_DEVICE", "cpu")
 IMPLEMENTED = os.environ.get("VLM_IMPLEMENTED", "false").lower() == "true"
+# stub | transformers | openai. Default keeps back-compat with VLM_IMPLEMENTED.
+BACKEND = os.environ.get("VLM_BACKEND", "transformers" if IMPLEMENTED else "stub").lower()
+# openai backend (e.g. local Ollama vision model, OpenAI-compatible):
+VLM_BASE_URL = os.environ.get("VLM_BASE_URL", "http://ollama:11434/v1")
+VLM_API_KEY = os.environ.get("VLM_API_KEY", "not-needed-local")
+VLM_TIMEOUT_S = int(os.environ.get("VLM_TIMEOUT_S", "180"))
 
 # Fixed DE/EN extraction prompt — kept in sync with app/ingestion/figures.py.
 CAPTION_PROMPT = (
@@ -65,8 +74,33 @@ async def health() -> dict:
         "service": "vlm",
         "model": MODEL,
         "device": DEVICE,
+        "backend": BACKEND,
         "implemented": IMPLEMENTED,
     }
+
+
+def _caption_openai(png: bytes) -> str:
+    """Caption via an OpenAI-compatible vision endpoint (e.g. local Ollama).
+    Sends the image as a data-URL content part with the DE/EN extraction prompt."""
+    import httpx
+
+    data_url = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+    resp = httpx.post(
+        f"{VLM_BASE_URL.rstrip('/')}/chat/completions",
+        headers={"Authorization": f"Bearer {VLM_API_KEY}"},
+        json={
+            "model": MODEL,
+            "temperature": 0,
+            "max_tokens": 400,
+            "messages": [{"role": "user", "content": [
+                {"type": "text", "text": CAPTION_PROMPT},
+                {"type": "image_url", "image_url": {"url": data_url}},
+            ]}],
+        },
+        timeout=VLM_TIMEOUT_S,
+    )
+    resp.raise_for_status()
+    return (resp.json()["choices"][0]["message"]["content"] or "").strip()
 
 
 def _stub_caption(png: bytes, kind: str, page: int | None) -> str:
@@ -87,11 +121,18 @@ async def caption(req: CaptionRequest) -> dict:
     if not png:
         raise HTTPException(status_code=400, detail="empty image")
 
-    if not IMPLEMENTED:
+    if BACKEND == "stub":
         return {"caption": _stub_caption(png, req.kind, req.page),
                 "model": MODEL, "stub": True}
 
-    # pragma: no cover - GPU-host path
+    if BACKEND == "openai":
+        try:
+            return {"caption": _caption_openai(png), "model": MODEL, "stub": False}
+        except Exception as exc:  # noqa: BLE001 - surface a clear 502 to the worker
+            raise HTTPException(status_code=502,
+                                detail=f"VLM openai backend failed: {exc}") from exc
+
+    # BACKEND == "transformers" — pragma: no cover - GPU-host path
     from io import BytesIO
 
     from PIL import Image
