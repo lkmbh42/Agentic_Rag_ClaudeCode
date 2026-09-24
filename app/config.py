@@ -62,6 +62,13 @@ class Settings(BaseSettings):
     llm_gen_model: str = "qwen2.5:3b"
     llm_class_model: str = "qwen2.5:3b"
     llm_request_timeout_s: int = 120
+    # Reasoning-model knob (gpt-oss and other "thinking" models exposed via the
+    # OpenAI API). When non-empty, generation calls request this effort level
+    # (low|medium|high) and short classification/grading calls are forced to
+    # "low"; token budgets get reasoning headroom so thinking never truncates the
+    # actual output. Leave EMPTY for non-reasoning backends (vLLM/Qwen) so the
+    # provider-specific param is never sent.
+    llm_reasoning_effort: str = ""
     # Phase 4: True ONLY when the served generation model accepts image content
     # parts (a VL model). Gates query-time image context end-to-end: the
     # assembler resolves page images and generate() attaches them. The ratified

@@ -91,6 +91,23 @@ class OpenAILLM:
             timeout=_settings.llm_request_timeout_s,
         )
         self.model = model or _settings.llm_gen_model
+        # Reasoning-model mode (gpt-oss etc.): empty for plain models (vLLM/Qwen),
+        # in which case no reasoning param is ever sent and budgets are unchanged.
+        self._reasoning = _settings.llm_reasoning_effort.strip().lower()
+
+    def _reasoning_kwargs(self, effort: str | None) -> dict:
+        """extra_body carrying reasoning_effort, only when the backend is a
+        reasoning model. `effort` overrides the configured level (short calls
+        pass 'low'); None uses the configured generation level."""
+        if not self._reasoning:
+            return {}
+        return {"extra_body": {"reasoning_effort": effort or self._reasoning}}
+
+    def _budget(self, base: int, thinking: int = 256) -> int:
+        """Give the answer its full token budget PLUS headroom for the reasoning
+        stream, which otherwise eats into `base` and truncates the output. No
+        change for non-reasoning backends."""
+        return base + thinking if self._reasoning else base
 
     @staticmethod
     def _user_content(user: str, images: list[str] | None):
@@ -106,22 +123,26 @@ class OpenAILLM:
                   for b64 in images]
         return parts
 
-    def _chat(self, system: str, user, max_tokens: int = 512) -> str:
+    def _chat(self, system: str, user, max_tokens: int = 512,
+              reasoning_effort: str | None = None) -> str:
         resp = self._client.chat.completions.create(
             model=self.model,
             messages=[{"role": "system", "content": system},
                       {"role": "user", "content": user}],
-            temperature=0.0, max_tokens=max_tokens,
+            temperature=0.0, max_tokens=self._budget(max_tokens),
+            **self._reasoning_kwargs(reasoning_effort),
         )
         return (resp.choices[0].message.content or "").strip()
 
     def _chat_stream(self, system: str, user,
-                     on_token: Callable[[str], None], max_tokens: int) -> str:
+                     on_token: Callable[[str], None], max_tokens: int,
+                     reasoning_effort: str | None = None) -> str:
         stream = self._client.chat.completions.create(
             model=self.model,
             messages=[{"role": "system", "content": system},
                       {"role": "user", "content": user}],
-            temperature=0.0, max_tokens=max_tokens, stream=True,
+            temperature=0.0, max_tokens=self._budget(max_tokens), stream=True,
+            **self._reasoning_kwargs(reasoning_effort),
         )
         parts: list[str] = []
         for chunk in stream:
@@ -136,7 +157,10 @@ class OpenAILLM:
 
     def _json(self, system: str, user: str, key: str, default, max_tokens: int = 64):
         try:
-            out = self._chat(system, user, max_tokens=max_tokens)
+            # Short structured calls: keep reasoning minimal so the JSON actually
+            # gets emitted within budget instead of being crowded out by thinking.
+            out = self._chat(system, user, max_tokens=max_tokens,
+                             reasoning_effort="low")
             # tolerate models that wrap JSON in prose/fences
             start, end = out.find("{"), out.rfind("}")
             if start != -1 and end != -1:

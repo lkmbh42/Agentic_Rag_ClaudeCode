@@ -90,6 +90,10 @@ GENERATOR_SYSTEM = (
     "For numeric values from a chart or figure: state whether the value was read "
     "from the axis labels or visually estimated. If a figure is marked as not "
     "interpreted, say so instead of guessing its contents. "
+    "Answer completely: give ALL the relevant details, values, and text the "
+    "context provides on the question — not just a title or one-word label. If the "
+    "context spells out the answer in full (e.g. the body text of a tip, notice, or "
+    "table), reproduce that substance rather than only naming it. "
     "If the context lacks the answer, say so briefly. "
     "Use the conversation so far to resolve follow-up questions."
 )
@@ -103,7 +107,13 @@ GENERATOR_SYSTEM_DE = (
     "zitiere nur vorhandene Kontexte. Bei Zahlenwerten aus einem Diagramm: gib an, "
     "ob der Wert aus der Achsenbeschriftung abgelesen oder visuell geschätzt ist. "
     "Wenn eine Abbildung als nicht interpretiert markiert ist, sage das, statt den "
-    "Inhalt zu raten. Wenn der Kontext die Antwort nicht enthält, sage das kurz. "
+    "Inhalt zu raten. "
+    "Antworte vollständig: nenne ALLE relevanten Angaben, Werte und Textinhalte, "
+    "die der Kontext zur Frage liefert — nicht nur einen Titel oder ein Stichwort. "
+    "Wenn der Kontext die Antwort ausführlich enthält (z. B. den Fließtext eines "
+    "Tipps, Hinweises oder einer Tabelle), gib diesen Inhalt wieder, statt ihn nur "
+    "zu benennen. "
+    "Wenn der Kontext die Antwort nicht enthält, sage das kurz. "
     "Nutze den bisherigen Gesprächsverlauf für Rückfragen."
 )
 
