@@ -81,7 +81,9 @@ class Nodes:
         if hit is not None:
             return {
                 "iterations": _bump(state), "cache_hit": True, "answer": hit.answer,
-                "citations": [{"document_id": d} for d in hit.document_ids],
+                # Full stored citations (verifiable sources); fall back to bare
+                # document ids for legacy entries written before citations were cached.
+                "citations": hit.citations or [{"document_id": d} for d in hit.document_ids],
                 "messages": [{"role": "assistant", "content": hit.answer}],
             }
         return {"iterations": _bump(state), "cache_hit": False}
@@ -242,6 +244,9 @@ class Nodes:
                     # Permission component of the cache key (Phase 3): the
                     # asker's FULL scope, not just the answer's sources.
                     requester_scope=_uuids(state.get("allowed_collection_ids", [])),
+                    # Persist the rich citations so a cache hit stays verifiable
+                    # (source-preview panel needs the passage + figure, not just ids).
+                    citations=state.get("citations", []),
                 )
             except Exception as exc:  # noqa: BLE001
                 logger.warning("cache write failed: %s", exc)

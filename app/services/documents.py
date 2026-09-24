@@ -90,6 +90,12 @@ async def reindex_document(db: AsyncSession, user: User, document_id: uuid.UUID)
     job = await create_job(db, doc.id)
     await db.commit()
     await db.refresh(doc)
+    # Re-indexing changes this document's chunks (better captions, new parse), so
+    # any cached answer derived from it is now stale. Evict it — otherwise the
+    # semantic cache keeps serving the pre-reindex answer and the improved
+    # pipeline never runs for those queries. (delete_document already does this;
+    # reindex must too — same reasoning.)
+    await invalidate_document(doc.id)
     await enqueue_index(doc.id, job_id=job.id)
     return doc
 

@@ -34,7 +34,7 @@ import hashlib
 import logging
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import redis as sync_redis
 from qdrant_client import QdrantClient, models
@@ -60,6 +60,10 @@ class CacheHit:
     score: float
     collection_ids: list[str]
     document_ids: list[str]
+    # Full citation records (marker, page, chunk_type, content, image_uri, …) so a
+    # cached answer keeps its verifiable sources — the source-preview panel needs
+    # these, not just document ids.
+    citations: list[dict] = field(default_factory=list)
 
 
 class SemanticCache:
@@ -119,6 +123,7 @@ class SemanticCache:
                     score=float(p.score),
                     collection_ids=list(entry_colls),
                     document_ids=list(payload.get("document_ids", [])),
+                    citations=list(payload.get("citations", [])),
                 )
         if stale_ids:
             try:
@@ -137,6 +142,7 @@ class SemanticCache:
         source_collection_ids: set[uuid.UUID],
         source_document_ids: set[uuid.UUID],
         requester_scope: set[uuid.UUID] | None = None,
+        citations: list[dict] | None = None,
     ) -> uuid.UUID:
         """`requester_scope` is the ASKER's full allowed-collection set — the
         permission component of the cache key. Defaults to the source
@@ -154,6 +160,7 @@ class SemanticCache:
                 "query_text": query,
                 "collection_ids": coll_ids,
                 "document_ids": doc_ids,
+                "citations": citations or [],
                 "scope_hash": _scope_hash(scope),
                 "created_at": time.time(),
             },
