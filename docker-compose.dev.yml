@@ -103,8 +103,13 @@ services:
   # the dev OpenAI-compatible backend. Prod compose serves vLLM exclusively.
   # Flagged as a hardware constraint at the Phase 1 gate; digest-pinned meanwhile.
   ollama:
-    image: ollama/ollama:latest@sha256:f1a705f2bd113fb8d15f85f7c217f0dc5f6bebda6b0cc42b82c3ad165ffcb9dc
+    image: ollama/ollama:latest@sha256:1685741456770df6e3cceb2a945a5f75e020f658d1701509668d6f4688f1dd3f
     ports: ["11434:11434"]
+    # Keep the VL model resident during a figure-captioning batch (avoids a
+    # ~2-min reload between figures, since each caption takes longer than the
+    # 5-min default idle unload).
+    environment:
+      OLLAMA_KEEP_ALIVE: "-1"
     volumes: ["ollama_data:/root/.ollama"]
     healthcheck:
       test: ["CMD", "ollama", "list"]
@@ -117,12 +122,41 @@ services:
     build:
       context: .
       dockerfile: docker/embeddings.Dockerfile
+      args:
+        # Dev override: build the REAL BGE-M3 + reranker image (torch + FlagEmbedding).
+        INSTALL_MODELS: "true"
     <<: *common-env
     environment:
       EMBEDDINGS_DEVICE: cpu
+      EMBEDDINGS_IMPLEMENTED: "true"   # serve real BGE-M3 (downloads on first /embed)
+    # Persist the Hugging Face model cache so BGE-M3 (~2.3 GB) downloads once.
+    volumes:
+      - hf_cache:/home/appuser/.cache/huggingface
     ports: ["${EMBEDDINGS_PORT:-8001}:8001"]
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8001/health',timeout=3).status==200 else 1)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # Dev figure captioner (real charts, no GPU): captions via a local quantized
+  # Ollama vision model over the OpenAI-compatible API. Enabled by VISUAL_PATH=full.
+  vlm:
+    build:
+      context: .
+      dockerfile: docker/vlm.Dockerfile
+    <<: *common-env
+    environment:
+      VLM_BACKEND: openai                     # caption via Ollama, not in-process transformers
+      VLM_BASE_URL: http://ollama:11434/v1    # the vlm service -> Ollama (worker -> vlm:8002)
+      VLM_MODEL: ${VLM_MODEL:-qwen2.5vl:7b}
+      VLM_DEVICE: cpu
+      VLM_TIMEOUT_S: "900"                     # 7B VL on CPU is slow; generous per-caption budget
+    depends_on:
+      ollama: {condition: service_started}
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8002/health',timeout=3).status==200 else 1)\""]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -198,3 +232,4 @@ volumes:
   ollama_data:
   documents_data:
   minio_data:
+  hf_cache:        # BGE-M3 model cache (dev real-embedder mode)
