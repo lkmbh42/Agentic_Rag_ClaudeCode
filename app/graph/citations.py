@@ -32,6 +32,11 @@ def extract_citations(answer: str, chunks: list[dict]) -> list[dict]:
                 "page_number": c.get("page_number"),
                 "chunk_type": c.get("chunk_type"),
                 "file_name": c.get("file_name"),
+                "section_title": c.get("section_title"),
+                # The exact passage the model was given for this source — powers the
+                # UI's source-preview panel so a user can verify the answer against
+                # what was actually retrieved, not just take it on faith.
+                "content": c.get("content"),
                 # Phase 4: lets the UI render a figure-crop thumbnail through
                 # the ACL-checked /media endpoint (None for plain text chunks).
                 "image_uri": c.get("image_uri"),

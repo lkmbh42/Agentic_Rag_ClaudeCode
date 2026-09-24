@@ -82,7 +82,11 @@ export const api = {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      buf += dec.decode(value, { stream: true });
+      // Normalize CRLF → LF: sse-starlette delimits events with "\r\n\r\n", but
+      // we split on "\n\n". Without this the delimiter is never found, no event
+      // ever parses, and the answer only shows after a manual reload. Stripping
+      // CR (not significant in SSE) also survives a "\r\n" split across chunks.
+      buf = (buf + dec.decode(value, { stream: true })).replace(/\r/g, "");
       let idx: number;
       while ((idx = buf.indexOf("\n\n")) >= 0) {
         const block = buf.slice(0, idx);

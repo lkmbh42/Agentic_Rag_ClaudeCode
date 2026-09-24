@@ -38,7 +38,7 @@ function AdminApp({ email, onExit, onLogout }: { email: string; onExit: () => vo
   return (
     <div className="shell">
       <aside className="sidebar">
-        <h2>Admin</h2>
+        <div className="brand" style={{ margin: ".1rem .5rem 1.1rem" }}><span className="mark">R</span> Recherche</div>
         <button className="back" onClick={onExit}>← Back to chat</button>
         {nav.map(([v, label]) => (
           <button key={v} className={view === v ? "active" : ""} onClick={() => setView(v)}>{label}</button>
@@ -74,11 +74,17 @@ function Login({ onLogin, error, setError }: { onLogin: (t: string) => void; err
   return (
     <div className="login">
       <form onSubmit={submit}>
-        <h1>Admin sign in</h1>
-        <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email" />
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="password" />
+        <div className="brand"><span className="mark">R</span> Recherche</div>
+        <h1>Sign in</h1>
+        <p className="sub">Search and question your documents — every answer shows its sources.</p>
+        <label htmlFor="email">Email</label>
+        <input id="email" value={email} onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@company.com" autoComplete="username" />
+        <label htmlFor="pw">Password</label>
+        <input id="pw" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+          placeholder="••••••••" autoComplete="current-password" />
         {error && <div className="error">{error}</div>}
-        <button className="primary" disabled={busy}>{busy ? "…" : "Sign in"}</button>
+        <button className="primary" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
       </form>
     </div>
   );
@@ -394,27 +400,54 @@ function Audit() {
 // ----- Chat app (ChatGPT/Claude-style: conversations on the left) ------------
 // ----- Phase 4 chat widgets --------------------------------------------------
 
-/** Citation chip: "[n] file.pdf · Seite N". Clicking toggles the source
- *  thumbnail (figure crop or page render) fetched through the ACL-checked
- *  /media endpoints. No image (degraded visual path) -> chip only. */
-function CitationChip({ c }: { c: any }) {
-  const [open, setOpen] = useState(false);
+/** Citation chip: "[n] file.pdf · Seite N". Clicking opens the source-preview
+ *  panel with the exact retrieved passage + figure, so the answer is verifiable. */
+function CitationChip({ c, onOpen }: { c: any; onOpen: () => void }) {
   const label = `${c.file_name || c.chunk_type || "source"}${c.page_number ? ` · Seite ${c.page_number}` : ""}`;
-  const mediaPath = citationMediaPath(c);
   return (
-    <span className="cite-wrap">
-      <button type="button" className={`chip ${mediaPath ? "linky" : ""}`}
-        title={c.document_id} onClick={() => mediaPath && setOpen(!open)}>
-        [{c.marker}] {label}
-      </button>
-      {open && mediaPath && <AuthThumb path={mediaPath} alt={label} />}
-    </span>
+    <button type="button" className="chip linky" title="Quelle anzeigen" onClick={onOpen}>
+      [{c.marker}] {label}
+    </button>
+  );
+}
+
+/** Source-preview panel: a right-side drawer showing the exact passage a citation
+ *  was drawn from — text + figure — so a user can check the answer against what
+ *  the model actually retrieved. Closes on ✕ or Escape; switching citations
+ *  swaps its content. Renders nothing when no source is selected. */
+function SourcePanel({ source, onClose }: { source: any | null; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  if (!source) return null;
+  const c = source;
+  const mediaPath = citationMediaPath(c);
+  const heading = `${c.file_name || "Quelle"}${c.page_number ? ` · Seite ${c.page_number}` : ""}`;
+  return (
+    <aside className="source-panel">
+      <div className="source-head">
+        <div className="source-head-text">
+          <div className="source-title">Quelle [{c.marker}]</div>
+          <div className="source-sub muted">{heading}{c.section_title ? ` · ${c.section_title}` : ""}</div>
+        </div>
+        <button className="source-close" onClick={onClose} aria-label="Schließen">✕</button>
+      </div>
+      <div className="source-body">
+        {mediaPath && mediaPath.startsWith("/media/figures/") &&
+          <AuthThumb path={mediaPath} className="source-figure" alt="Abbildung der Quelle" />}
+        <span className="source-badge">{c.chunk_type || "text"}</span>
+        <p className="source-text">{c.content || "(kein Textinhalt in dieser Quelle)"}</p>
+      </div>
+    </aside>
   );
 }
 
 /** <img> that fetches through the JWT-authenticated API (a plain src can't
  *  carry the bearer token). Missing images hide themselves — never an error. */
-function AuthThumb({ path, alt }: { path: string; alt: string }) {
+function AuthThumb({ path, alt, className = "cite-thumb", onClick }:
+  { path: string; alt: string; className?: string; onClick?: () => void }) {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
@@ -426,7 +459,49 @@ function AuthThumb({ path, alt }: { path: string; alt: string }) {
   }, [path]);
   if (failed) return <span className="muted thumb-missing">no preview available</span>;
   if (!url) return <span className="muted thumb-missing">loading preview…</span>;
-  return <img className="cite-thumb" src={url} alt={alt} />;
+  return <img className={className} src={url} alt={alt} onClick={onClick}
+    role={onClick ? "button" : undefined} />;
+}
+
+/** Full-screen overlay showing one figure at full size. Closes on backdrop
+ *  click or Escape. */
+function Lightbox({ path, onClose }: { path: string; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return (
+    <div className="lightbox-backdrop" onClick={onClose} role="dialog" aria-modal="true">
+      <button className="lightbox-close" onClick={onClose} aria-label="Schließen">✕</button>
+      {/* stop propagation so a click ON the image doesn't close it */}
+      <div className="lightbox-stage" onClick={(e) => e.stopPropagation()}>
+        <AuthThumb path={path} className="lightbox-img" alt="Abbildung (vergrößert)" />
+      </div>
+    </div>
+  );
+}
+
+/** Figures drawn from the cited sources, shown automatically under an answer —
+ *  only real figure crops (not page fallbacks), deduped. Click to enlarge.
+ *  Renders nothing when the answer used no images. */
+function AnswerFigures({ citations }: { citations: any[] }) {
+  const [zoom, setZoom] = useState<string | null>(null);
+  const figs = Array.from(new Set(
+    (citations || [])
+      .map((c) => citationMediaPath(c))
+      .filter((p): p is string => !!p && p.startsWith("/media/figures/"))
+  ));
+  if (figs.length === 0) return null;
+  return (
+    <div className="answer-figures">
+      {figs.map((p) => (
+        <AuthThumb key={p} path={p} className="answer-figure-img"
+          alt="Abbildung aus der Quelle" onClick={() => setZoom(p)} />
+      ))}
+      {zoom && <Lightbox path={zoom} onClose={() => setZoom(null)} />}
+    </div>
+  );
 }
 
 /** 👍/👎 with an optional reason on 👎, persisted per (message, user). */
@@ -473,6 +548,7 @@ function ChatApp({ email, isAdmin, onAdmin, onLogout }: {
   const [busy, setBusy] = useState(false);
   const [streaming, setStreaming] = useState("");
   const [error, setError] = useState("");
+  const [source, setSource] = useState<any | null>(null); // open source-preview
   const endRef = useRef<HTMLDivElement>(null);
 
   async function loadSessions() {
@@ -538,30 +614,39 @@ function ChatApp({ email, isAdmin, onAdmin, onLogout }: {
 
       <main className="conv-main">
         <header className="conv-head">
-          <span className="conv-title">{currentTitle}</span>
-          <span className="muted">Grounded only in documents you can access</span>
+          <span className="conv-title">{sid ? currentTitle : (<span className="brand"><span className="mark">R</span> Recherche</span>)}</span>
+          <span className="muted">Answers are grounded in documents you can access</span>
         </header>
         <div className="chat-thread">
           {messages.length === 0 && !busy && (
             <div className="welcome">
-              <h2>Agentic RAG</h2>
-              <p className="muted">Ask a question about your documents to begin.</p>
+              <div className="mark">R</div>
+              <h2>Ask your documents</h2>
+              <p>Every answer is drawn from your own files — with the sources it used, down to the page. It reads text, tables, and the charts inside images.</p>
+              <div className="prompt-suggest">
+                {["Summarize the key facts in this document",
+                  "What does the chart show, and what's the trend?",
+                  "Which values are listed in the table?"].map((q) => (
+                  <button key={q} onClick={() => setInput(q)}>{q}</button>
+                ))}
+              </div>
             </div>
           )}
           {messages.map((m, i) => (
             <div key={i} className={`bubble ${m.role}`}>
               <div className="bubble-body">{m.content}</div>
+              {m.role === "assistant" && <AnswerFigures citations={m.citations} />}
               {m.role === "assistant" && m.citations && m.citations.length > 0 && (
                 <div className="cites">
                   {m.citations.map((c: any, j: number) => (
-                    <CitationChip c={c} key={j} />
+                    <CitationChip c={c} key={j} onOpen={() => setSource(c)} />
                   ))}
                 </div>
               )}
-              {m.role === "assistant" && (m.route || m.cache_hit) && (
+              {m.role === "assistant" && (m.route || m.cache_hit || m.insufficient) && (
                 <div className="meta">
-                  {m.cache_hit ? "⚡ cached" : `route: ${m.route ?? "—"}`}
-                  {m.insufficient ? " · no supporting evidence" : ""}
+                  <span>{m.cache_hit ? "⚡ from cache" : `via ${m.route ?? "search"}`}</span>
+                  {m.insufficient && <span>· no supporting evidence found</span>}
                 </div>
               )}
               {m.role === "assistant" && m.message_id && (
@@ -571,18 +656,28 @@ function ChatApp({ email, isAdmin, onAdmin, onLogout }: {
           ))}
           {busy && (
             <div className="bubble assistant">
-              <div className="bubble-body">{streaming || <span className="muted">thinking…</span>}</div>
+              <div className="bubble-body">
+                {streaming
+                  ? (<>{streaming}<span className="caret">▍</span></>)
+                  : (<span className="typing"><i /><i /><i /></span>)}
+              </div>
             </div>
           )}
           <div ref={endRef} />
         </div>
         {error && <div className="notice error">{error}</div>}
         <form className="chat-input" onSubmit={send}>
-          <input value={input} onChange={(e) => setInput(e.target.value)}
-            placeholder="Message…" disabled={busy} autoFocus />
-          <button className="primary" disabled={busy || !input.trim()}>{busy ? "…" : "Send"}</button>
+          <div className="composer">
+            <input value={input} onChange={(e) => setInput(e.target.value)}
+              placeholder="Ask about your documents…" disabled={busy} autoFocus />
+            <button className="send" type="submit" aria-label="Send" disabled={busy || !input.trim()}>
+              {busy ? "…" : "↑"}
+            </button>
+          </div>
         </form>
+        {messages.length === 0 && <div className="composer-hint">Recherche can make mistakes — check the cited sources.</div>}
       </main>
+      <SourcePanel source={source} onClose={() => setSource(null)} />
     </div>
   );
 }
