@@ -129,6 +129,9 @@ def index_document(
                 "file_name": doc.filename,
                 "file_type": doc.file_type,
                 "content": ch.normalized_content,
+                # Figure crop location (set by the figure_sink for image chunks),
+                # so retrieval can hand the UI an image to show for a cited figure.
+                "image_uri": (ch.source_metadata or {}).get("image_uri"),
             }
             points.append(QdrantIndex.make_point(
                 chunk_id,

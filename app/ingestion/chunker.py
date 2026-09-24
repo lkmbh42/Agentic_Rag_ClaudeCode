@@ -72,11 +72,22 @@ def table_to_markdown(table: Table) -> str:
     return "\n".join(lines)
 
 
-def table_summary(table: Table, section_title: str | None = None) -> str:
-    """Auto-generated one-line summary (DE, deterministic)."""
+def table_summary(table: Table, section_title: str | None = None,
+                  caption_hint: str | None = None) -> str:
+    """Auto-generated one-line summary (DE, deterministic).
+
+    A table's rows are just names and numbers — they share almost no words with a
+    natural-language question, so on their own they neither embed near the query
+    nor score on a reranker. The summary line is what makes the chunk findable, so
+    it must name what the table is *about*: the parser's own caption if it has one,
+    else the caption line that sits immediately above the table on the page
+    (`caption_hint`), else the broader section. Without this, "wie viele Einwohner
+    hat Marburg?" cannot reach a table captioned "Einwohner mit Hauptwohnsitz…"."""
     parts = [f"Tabelle mit {table.n_rows} Zeilen und {table.n_cols} Spalten"]
     if table.caption:
         parts.append(f"({table.caption.strip()})")
+    elif caption_hint:
+        parts.append(f"({caption_hint.strip()})")
     elif section_title:
         parts.append(f"(Abschnitt: {section_title.strip()})")
     if table.header:
@@ -93,12 +104,15 @@ def serialize_row(row: list[str], header: list[str] | None, row_no: int) -> str:
     return f"Zeile {row_no}: {pairs}"
 
 
-def chunk_table(el: ParsedElement) -> list[ChunkData]:
+def chunk_table(el: ParsedElement, caption_hint: str | None = None) -> list[ChunkData]:
     """Table element → markdown chunk (+ row chunks when large).
 
     Structured rows are read from `el.metadata['rows']`/`['header']`; when a
     parser supplies only pre-rendered markdown in `el.content`, that is used
     as-is (already structure-preserving) and row serialization is skipped.
+
+    `caption_hint` is the text line directly above the table (see table_summary):
+    it makes an otherwise word-less table findable by natural-language queries.
     """
     meta = el.metadata or {}
     rows = meta.get("rows")
@@ -107,10 +121,11 @@ def chunk_table(el: ParsedElement) -> list[ChunkData]:
     if rows:
         table = Table(rows=rows, header=meta.get("header"), caption=meta.get("caption"))
         md = table_to_markdown(table)
-        summary = table_summary(table, el.section_title)
+        summary = table_summary(table, el.section_title, caption_hint)
     else:
+        cap = caption_hint or el.section_title
+        summary = f"Tabelle (Abschnitt: {cap})." if cap else "Tabelle."
         md = el.content
-        summary = f"Tabelle (Abschnitt: {el.section_title})." if el.section_title else "Tabelle."
         table = None
 
     base_meta = {k: v for k, v in meta.items() if k not in ("rows", "header")}
@@ -237,12 +252,28 @@ def chunk_text_run(run: list[ParsedElement]) -> list[ChunkData]:
 _PASSTHROUGH = {ChunkType.IMAGE, ChunkType.CHART, ChunkType.DIAGRAM,
                 ChunkType.FORM, ChunkType.OCR}
 
+_CAPTION_HINT_MAX = 160
+
+
+def _caption_hint(el: ParsedElement | None) -> str | None:
+    """The caption/title to carry onto a following table or figure: the first
+    line of the nearest preceding text, kept short so it names the visual without
+    diluting its embedding with a whole paragraph. None when there's no usable
+    text or it's too long to be a caption."""
+    if el is None:
+        return None
+    line = (el.content or "").strip().splitlines()[0].strip() if (el.content or "").strip() else ""
+    if not line or len(line) > _CAPTION_HINT_MAX:
+        return None
+    return line
+
 
 def build_chunks_v2(elements: list[ParsedElement]) -> list[ChunkData]:
     """Docling-path chunk builder: heading-bounded semantic text chunks,
     structure-preserving table chunks, visual elements passed through."""
     out: list[ChunkData] = []
     run: list[ParsedElement] = []
+    last_text: ParsedElement | None = None  # nearest text above a table/figure
 
     def flush() -> None:
         nonlocal run
@@ -257,22 +288,32 @@ def build_chunks_v2(elements: list[ParsedElement]) -> list[ChunkData]:
             if run and el.section_title != run[0].section_title:
                 flush()
             run.append(el)
+            last_text = el
             continue
         flush()
+        # The line directly above a table/figure is almost always its caption or
+        # title; carry it into the chunk so a word-less table/image is reachable
+        # by a natural-language query (see table_summary). Only used as a caption
+        # when the element carries no caption of its own.
+        caption_hint = _caption_hint(last_text)
         if el.kind == ChunkType.TABLE:
-            out.extend(chunk_table(el))
+            out.extend(chunk_table(el, caption_hint))
         elif el.kind in _PASSTHROUGH:
-            normalized = normalize_text(el.content)
+            normalized = normalize_text(el.content) or el.content
+            has_caption = bool((el.metadata or {}).get("caption"))
+            if caption_hint and not has_caption and caption_hint not in normalized:
+                normalized = f"{caption_hint}\n\n{normalized}"
             out.append(ChunkData(
                 chunk_type=el.kind,
                 raw_content=el.content,
-                normalized_content=normalized or el.content,
+                normalized_content=normalized,
                 chunk_index=0,
                 page_number=el.page,
                 section_title=el.section_title,
                 source_metadata={**el.metadata,
                                  **({"bbox": list(el.bbox)} if el.bbox else {})},
             ))
+        last_text = None  # consumed — don't attach it to a later, unrelated element
     flush()
 
     for i, chunk in enumerate(out):

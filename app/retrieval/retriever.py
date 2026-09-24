@@ -86,10 +86,18 @@ class Retriever:
         # off-topic noise never reaches the generator (matters most with the weak
         # dev embedder; harmless with the prod cross-encoder). Falls back to the
         # full ordering if every score is zero.
+        #
+        # The factor is deliberately low (0.05, not 0.15): the cross-encoder scores
+        # table/figure chunks well below a matching *heading* (bare numbers share
+        # no words with the question), yet those chunks carry the actual answer in
+        # a table-heavy corpus. 0.15×a strong heading was clipping the very table
+        # the user asked for while true noise still sits an order of magnitude
+        # lower — so 0.05 keeps the table and still rejects the junk. top_n caps
+        # the final count regardless.
         if rerank_scores:
             best = max(rerank_scores)
             if best > 0:
-                gated = [i for i in order if rerank_scores[i] >= best * 0.15]
+                gated = [i for i in order if rerank_scores[i] >= best * 0.05]
                 order = gated or order
 
         results: list[RetrievedChunk] = []
