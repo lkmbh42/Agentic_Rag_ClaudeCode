@@ -55,6 +55,37 @@ async def test_refresh_rotates_and_old_token_revoked(client, seed):
     assert r2.status_code == 401
 
 
+async def test_logout_revokes_access_and_refresh(client, seed):
+    """Logout must end the whole session: the refresh token can't outlive it
+    (previously only the access token was revoked, leaving refresh valid 7 days)."""
+    resp = await client.post(
+        "/auth/login",
+        json={"email": seed["bob"]["email"], "password": seed["bob"]["password"]},
+    )
+    access = resp.json()["access_token"]
+    refresh = resp.json()["refresh_token"]
+
+    out = await client.post("/auth/logout", headers={"Authorization": f"Bearer {access}"})
+    assert out.status_code == 204
+
+    # The access token is denylisted...
+    assert (await client.get("/auth/me", headers={"Authorization": f"Bearer {access}"})).status_code == 401
+    # ...and the refresh token can no longer mint a new pair.
+    assert (await client.post("/auth/refresh", json={"refresh_token": refresh})).status_code == 401
+
+
+async def test_login_sets_httponly_refresh_cookie(client, seed):
+    resp = await client.post(
+        "/auth/login",
+        json={"email": seed["bob"]["email"], "password": seed["bob"]["password"]},
+    )
+    cookie = resp.headers.get("set-cookie", "")
+    assert "recherche_refresh=" in cookie and "HttpOnly" in cookie
+    # A browser with only the cookie (no body) can refresh.
+    r = await client.post("/auth/refresh")
+    assert r.status_code == 200 and r.json()["access_token"]
+
+
 async def test_refresh_rejected_after_session_epoch_bump(client, seed):
     """Regression: revoke-sessions must also kill refresh tokens, not just
     access tokens — otherwise a refresh mints a fresh valid pair."""

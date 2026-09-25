@@ -1,41 +1,53 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { AdminApp } from "./Admin";
-import { api, AUTH_EXPIRED, clearTokens, getToken } from "./api";
+import { api, AUTH_EXPIRED } from "./api";
 import { ChatApp } from "./Chat";
 import { ConfirmHost } from "./ui";
 
+type Phase = "booting" | "in" | "out";
+
 export default function App() {
-  const [token, setTok] = useState<string | null>(getToken());
+  const [phase, setPhase] = useState<Phase>("booting");
   const [me, setMe] = useState<any>(null);
   const [notice, setNotice] = useState("");
   const [mode, setMode] = useState<"chat" | "admin">("chat");
 
-  // A session that can't be refreshed ends here, with a clear reason, instead
-  // of leaving the UI half-working ("No conversations yet", "stream failed").
+  const enter = useCallback(async () => {
+    const user = await api.me();
+    setMe(user); setMode("chat"); setPhase("in");
+  }, []);
+
+  // On load the access token is gone (memory-only), so silently resume from the
+  // refresh cookie before choosing between the app and the sign-in screen.
+  useEffect(() => {
+    let live = true;
+    api.restore()
+      .then((ok) => ok ? enter() : Promise.reject())
+      .catch(() => { if (live) setPhase("out"); });
+    return () => { live = false; };
+  }, [enter]);
+
+  // A session that can't be refreshed ends here with a clear reason, rather than
+  // leaving the UI half-working ("No conversations yet", "stream failed").
   useEffect(() => {
     const onExpired = () => {
-      setTok(null); setMe(null); setMode("chat");
+      setMe(null); setMode("chat"); setPhase("out");
       setNotice("Your session has expired. Sign in to continue.");
     };
     window.addEventListener(AUTH_EXPIRED, onExpired);
     return () => window.removeEventListener(AUTH_EXPIRED, onExpired);
   }, []);
 
-  useEffect(() => {
-    if (!token) { setMe(null); return; }
-    api.me().then(setMe).catch(() => { clearTokens(); setTok(null); });
-  }, [token]);
-
   async function logout() {
     await api.logout();
-    setTok(null); setMe(null); setMode("chat"); setNotice("");
+    setMe(null); setMode("chat"); setNotice(""); setPhase("out");
   }
 
   let screen;
-  if (!token) {
-    screen = <Login notice={notice} onLogin={(t) => { setNotice(""); setTok(t); }} />;
-  } else if (!me) {
-    screen = <div className="boot" role="status"><span className="mark" aria-hidden="true">R</span></div>;
+  if (phase === "booting") {
+    screen = <div className="boot" role="status" aria-label="Loading"><span className="mark" aria-hidden="true">R</span></div>;
+  } else if (phase === "out" || !me) {
+    screen = <Login notice={notice} onLogin={() => { setNotice(""); enter(); }} />;
   } else if (mode === "admin" && me.role === "admin") {
     screen = <AdminApp email={me.email} onExit={() => setMode("chat")} onLogout={logout} />;
   } else {
@@ -44,7 +56,7 @@ export default function App() {
   return <>{screen}<ConfirmHost /></>;
 }
 
-function Login({ onLogin, notice }: { onLogin: (t: string) => void; notice: string }) {
+function Login({ onLogin, notice }: { onLogin: () => void; notice: string }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -54,7 +66,7 @@ function Login({ onLogin, notice }: { onLogin: (t: string) => void; notice: stri
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true); setError("");
-    try { const r = await api.login(email.trim(), password); onLogin(r.access_token); }
+    try { await api.login(email.trim(), password); onLogin(); }
     catch (err: any) { setError(err.message || "Sign-in failed."); }
     finally { setBusy(false); }
   }

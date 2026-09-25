@@ -1,10 +1,10 @@
 # Admin UI: build the React/Vite/TS SPA, serve the static assets via nginx.
-# VITE_API_BASE selects where the SPA calls the API:
-#   dev  -> http://localhost:8000 (backend directly; CORS-allowed)
-#   prod -> /api  (same-origin, behind the reverse proxy)
+# VITE_API_BASE selects where the SPA calls the API. Default /api: the nginx
+# below proxies /api same-origin, which is what lets the refresh token be an
+# httpOnly cookie. Override only for a split-origin deployment.
 FROM node:20-alpine AS build
 WORKDIR /app
-ARG VITE_API_BASE=http://localhost:8000
+ARG VITE_API_BASE=/api
 ENV VITE_API_BASE=$VITE_API_BASE
 COPY admin-ui/app/package.json ./
 RUN npm install

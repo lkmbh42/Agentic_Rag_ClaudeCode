@@ -1,28 +1,27 @@
-// Thin API client. Talks only to the documented FastAPI endpoints with a JWT
-// bearer token — no privileged backdoor. Base URL is build-time configurable
-// (VITE_API_BASE); dev default hits the backend directly (CORS-allowed), prod
-// builds with VITE_API_BASE=/api behind the reverse proxy.
+// Thin API client. Same-origin with the API (default base /api, proxied by
+// nginx in the container and by Vite in dev) so the refresh token can live in
+// an httpOnly cookie the browser never exposes to JS.
 //
-// Sessions: the access token lives 15 min. On a 401 the client rotates the
-// refresh token once (single-flight, shared by concurrent requests) and retries;
-// if that fails it clears both tokens and fires AUTH_EXPIRED so the app shows
-// the sign-in screen instead of failing silently.
+// Sessions: the access token is held in MEMORY only (never in storage) and
+// lives 15 min. The long-lived refresh token is the httpOnly cookie. On a 401
+// the client silently refreshes once (single-flight) and retries; on failure it
+// clears the access token and fires AUTH_EXPIRED so the app shows sign-in.
 
-const BASE = (import.meta.env.VITE_API_BASE as string) || "http://localhost:8000";
-const TOKEN_KEY = "rag_admin_token";
-const REFRESH_KEY = "rag_refresh_token";
+const BASE = (import.meta.env.VITE_API_BASE as string) || "/api";
 export const AUTH_EXPIRED = "recherche:auth-expired";
 
+// In-memory only: a hard reload drops it and the app silently re-mints one from
+// the refresh cookie (see api.restore). Not reachable by XSS via storage.
+let accessToken: string | null = null;
+
 export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  return accessToken;
 }
-function setTokens(access: string, refresh?: string) {
-  localStorage.setItem(TOKEN_KEY, access);
-  if (refresh) localStorage.setItem(REFRESH_KEY, refresh);
+function setAccess(token: string) {
+  accessToken = token;
 }
 export function clearTokens() {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(REFRESH_KEY);
+  accessToken = null;
 }
 
 export class ApiError extends Error {
@@ -55,17 +54,12 @@ let refreshing: Promise<boolean> | null = null;
 function refreshTokens(): Promise<boolean> {
   if (!refreshing) {
     refreshing = (async () => {
-      const rt = localStorage.getItem(REFRESH_KEY);
-      if (!rt) return false;
       try {
-        const res = await fetch(`${BASE}/auth/refresh`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ refresh_token: rt }),
-        });
+        // No body: the refresh token rides along as the httpOnly cookie.
+        const res = await fetch(`${BASE}/auth/refresh`, { method: "POST", credentials: "include" });
         if (!res.ok) return false;
         const d = await res.json();
-        setTokens(d.access_token, d.refresh_token);
+        setAccess(d.access_token);
         return true;
       } catch {
         return false;
@@ -83,11 +77,10 @@ function expire() {
 /** fetch with the bearer token; on 401 rotate the refresh token once and retry. */
 async function authFetch(path: string, init: RequestInit = {}, retry = true): Promise<Response> {
   const headers = new Headers(init.headers);
-  const token = getToken();
-  if (token) headers.set("Authorization", `Bearer ${token}`);
+  if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
   let res: Response;
   try {
-    res = await fetch(`${BASE}${path}`, { ...init, headers });
+    res = await fetch(`${BASE}${path}`, { ...init, headers, credentials: "include" });
   } catch (e: any) {
     if (e?.name === "AbortError") throw e;
     throw new ApiError(0, "Can't reach the server. Check your connection and try again.");
@@ -128,14 +121,18 @@ export type StreamHandlers = {
 export const api = {
   base: BASE,
   async login(email: string, password: string) {
-    const r = await req<{ access_token: string; refresh_token: string }>("/auth/login", {
+    const r = await req<{ access_token: string }>("/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
-    setTokens(r.access_token, r.refresh_token);
+    setAccess(r.access_token);
     return r;
   },
-  /** Revoke the access token server-side (best effort), then forget both. */
+  /** Silently resume a session from the refresh cookie on app start. */
+  async restore(): Promise<boolean> {
+    return refreshTokens();
+  },
+  /** End the session server-side (revokes access + refresh, clears cookie). */
   async logout() {
     try { await authFetch("/auth/logout", { method: "POST" }, false); } catch { /* offline: still sign out locally */ }
     clearTokens();

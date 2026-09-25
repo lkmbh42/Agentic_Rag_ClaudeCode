@@ -5,7 +5,15 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import (
+    APIRouter,
+    Cookie,
+    Depends,
+    HTTPException,
+    Request,
+    Response,
+    status,
+)
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,9 +51,12 @@ def _ttl_seconds(exp: int) -> int:
     return max(0, exp - int(datetime.now(timezone.utc).timestamp()))
 
 
-def _issue_pair(user: User) -> TokenResponse:
+def _issue_pair(user: User, response: Response) -> TokenResponse:
+    """Mint an access+refresh pair, set the refresh token as an httpOnly cookie
+    for browsers, and also return it in the body for non-browser clients."""
     access = security.create_access_token(user.id, user.role.value, user.department_id)
     refresh = security.create_refresh_token(user.id, user.role.value, user.department_id)
+    _set_refresh_cookie(response, refresh.token)
     return TokenResponse(
         access_token=access.token,
         refresh_token=refresh.token,
@@ -53,10 +64,30 @@ def _issue_pair(user: User) -> TokenResponse:
     )
 
 
+def _set_refresh_cookie(response: Response, token: str) -> None:
+    # Path "/" (not "/auth"): behind the /api proxy the browser sees the endpoint
+    # at /api/auth/*, so a narrower path wouldn't be sent back. httpOnly keeps it
+    # out of JS; SameSite=Lax + same-origin covers CSRF for these POSTs.
+    response.set_cookie(
+        _settings.refresh_cookie_name, token,
+        max_age=_settings.refresh_token_ttl_days * 86400,
+        httponly=True, secure=_settings.cookie_secure,
+        samesite=_settings.cookie_samesite, path="/",
+    )
+
+
+def _clear_refresh_cookie(response: Response) -> None:
+    response.delete_cookie(
+        _settings.refresh_cookie_name, path="/", httponly=True,
+        secure=_settings.cookie_secure, samesite=_settings.cookie_samesite,
+    )
+
+
 @router.post("/login", response_model=TokenResponse)
 async def login(
     body: LoginRequest,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
     result = await db.execute(select(User).where(User.email == body.email))
@@ -88,7 +119,7 @@ async def login(
             status_code=status.HTTP_403_FORBIDDEN, detail="Account is disabled"
         )
 
-    tokens = _issue_pair(user)
+    tokens = _issue_pair(user, response)
     await record_audit(
         db, action=AuditAction.LOGIN, user_id=user.id, ip_address=_client_ip(request)
     )
@@ -98,12 +129,21 @@ async def login(
 
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh(
-    body: RefreshRequest,
     request: Request,
+    response: Response,
+    body: RefreshRequest | None = None,
+    refresh_cookie: str | None = Cookie(None, alias=_settings.refresh_cookie_name),
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
+    # An explicit body token wins (a deliberate choice by non-browser clients);
+    # browsers send no body and the httpOnly cookie is used.
+    presented = (body.refresh_token if body and body.refresh_token else None) or refresh_cookie
+    if not presented:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="No refresh token"
+        )
     try:
-        payload = security.decode_token(body.refresh_token)
+        payload = security.decode_token(presented)
     except security.JWTError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
@@ -144,7 +184,7 @@ async def refresh(
     # Rotation: invalidate the presented refresh token so it cannot be reused.
     await revoke_jti(jti, _ttl_seconds(payload["exp"]))
 
-    tokens = _issue_pair(user)
+    tokens = _issue_pair(user, response)
     await record_audit(
         db, action=AuditAction.TOKEN_REFRESH, user_id=user.id,
         ip_address=_client_ip(request),
@@ -159,16 +199,29 @@ async def refresh(
     response_class=Response,
 )
 async def logout(
+    response: Response,
     creds: HTTPAuthorizationCredentials = Depends(_bearer),
+    refresh_cookie: str | None = Cookie(None, alias=_settings.refresh_cookie_name),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
-    """Revoke the presented access token immediately (denylist its jti)."""
+    """End the session: revoke BOTH the access token and the refresh token
+    (so a stolen/leaked refresh token can't outlive logout), and clear the
+    cookie. Revoking only the access token left the refresh valid for 7 days."""
     payload = security.decode_token(creds.credentials)
     await revoke_jti(payload["jti"], _ttl_seconds(payload["exp"]))
+    if refresh_cookie:
+        try:
+            rp = security.decode_token(refresh_cookie)
+            if rp.get("jti"):
+                await revoke_jti(rp["jti"], _ttl_seconds(rp.get("exp", 0)))
+        except security.JWTError:
+            pass  # an unparseable cookie is already useless
+    _clear_refresh_cookie(response)
     await record_audit(db, action=AuditAction.LOGOUT, user_id=user.id)
     await db.commit()
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    response.status_code = status.HTTP_204_NO_CONTENT
+    return response
 
 
 @router.get("/me", response_model=CurrentUser)

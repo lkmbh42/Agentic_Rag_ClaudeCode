@@ -118,6 +118,13 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_ttl_min: int = 15
     refresh_token_ttl_days: int = 7
+    # The refresh token is delivered to browsers as an httpOnly cookie (not
+    # JS-readable, so XSS can't exfiltrate the long-lived credential). Requires
+    # the SPA to be same-origin with the API (served behind the /api proxy).
+    # cookie_secure MUST be true in prod (HTTPS); dev is plain HTTP so it's off.
+    refresh_cookie_name: str = "recherche_refresh"
+    cookie_secure: bool = False
+    cookie_samesite: str = "lax"
 
     # --- ingestion ---
     storage_dir: str = "/data/documents"
