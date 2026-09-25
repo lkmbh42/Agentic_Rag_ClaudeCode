@@ -36,6 +36,8 @@ class ChatMessageOut(BaseModel):
     created_at: datetime
     # Phase 4: the requesting user's own rating on this message, if any.
     feedback: str | None = None
+    # Sources shown with an assistant answer (None for user messages/old rows).
+    citations: list[dict] | None = None
 
     model_config = {"from_attributes": True}
 

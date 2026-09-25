@@ -135,7 +135,8 @@ async def chat(
 
     answer = result.get("answer", "")
     assistant_msg = ChatMessage(session_id=session.id, role=MessageRole.ASSISTANT,
-                                content=answer)
+                                content=answer,
+                                citations=result.get("citations") or None)
     db.add(assistant_msg)
     await db.flush()  # id needed in the response (feedback anchor, Phase 4)
     await record_audit(
@@ -228,7 +229,8 @@ async def chat_stream(
         total_ms = (time.perf_counter() - t0) * 1000
         answer = final_state.get("answer", "")
         assistant_msg = ChatMessage(session_id=session_id, role=MessageRole.ASSISTANT,
-                                    content=answer)
+                                    content=answer,
+                                    citations=final_state.get("citations") or None)
         db.add(assistant_msg)
         await db.flush()
         await record_audit(
@@ -301,16 +303,52 @@ async def get_session(
             )
         )
         fb = {f.message_id: f.rating for f in fb_rows.scalars()}
+    readable = await _readable_document_ids(db, user, messages)
     return ChatSessionDetail(
         id=session.id,
         title=session.title,
         created_at=session.created_at,
         messages=[
             ChatMessageOut(id=m.id, role=m.role, content=m.content,
-                           created_at=m.created_at, feedback=fb.get(m.id))
+                           created_at=m.created_at, feedback=fb.get(m.id),
+                           citations=_visible_citations(m.citations, readable))
             for m in messages
         ],
     )
+
+
+async def _readable_document_ids(db: AsyncSession, user: User,
+                                 messages: list[ChatMessage]) -> set[str]:
+    """Cited documents the user can STILL read. Stored citations carry verbatim
+    passages; access can be revoked after the answer was given, so history must
+    be re-checked against current permissions, not the ones at answer time."""
+    from app.models.document import Document
+
+    cited = {c.get("document_id") for m in messages for c in (m.citations or [])
+             if c.get("document_id")}
+    if not cited:
+        return set()
+    allowed = await accessible_collection_ids(db, user)
+    if not allowed:
+        return set()
+    rows = await db.execute(
+        select(Document.id).where(
+            Document.id.in_([uuid.UUID(d) for d in cited]),
+            Document.collection_id.in_(allowed),
+        )
+    )
+    return {str(r) for r in rows.scalars()}
+
+
+def _visible_citations(citations: list[dict] | None,
+                       readable: set[str]) -> list[dict] | None:
+    """Keep full citations for readable documents; for the rest keep only the
+    marker so the answer's [n] still resolves, with no passage, file or figure."""
+    if not citations:
+        return citations
+    return [c if c.get("document_id") in readable
+            else {"marker": c.get("marker"), "revoked": True}
+            for c in citations]
 
 
 @router.post("/messages/{message_id}/feedback", status_code=status.HTTP_204_NO_CONTENT)

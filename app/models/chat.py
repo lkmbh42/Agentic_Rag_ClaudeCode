@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 
 from sqlalchemy import Enum, ForeignKey, String, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UUIDMixin
@@ -37,6 +37,9 @@ class ChatMessage(UUIDMixin, TimestampMixin, Base):
         Enum(MessageRole, name="message_role"), nullable=False
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    # Assistant answers only: the citation records shown with the answer, so a
+    # reopened conversation keeps its verifiable sources.
+    citations: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
 
 class MessageFeedback(UUIDMixin, TimestampMixin, Base):
