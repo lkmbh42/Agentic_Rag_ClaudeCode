@@ -12,7 +12,7 @@ from __future__ import annotations
 import secrets
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,6 +35,7 @@ from app.schemas.admin import (
     CollectionCreate,
     DepartmentCreate,
     DepartmentOut,
+    KnowledgeGapReport,
     PermissionCreate,
     PermissionOut,
     PermissionUpdate,
@@ -46,6 +47,7 @@ from app.schemas.admin import (
 from app.schemas.collection import CollectionOut
 from app.services.audit import record_audit
 from app.services.cache import invalidate_collection, invalidate_document
+from app.services.knowledge_gaps import build_report
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -166,6 +168,17 @@ async def list_audit_logs(
         select(AuditLog).order_by(AuditLog.created_at.desc()).limit(min(limit, 500))
     )
     return list(result.scalars().all())
+
+
+@router.get("/knowledge-gaps", response_model=KnowledgeGapReport)
+async def knowledge_gaps(
+    days: int = Query(30, ge=1, le=365),
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Questions the RAG couldn't answer well (abstained, declined, or 👎),
+    grouped and ranked by frequency — i.e. which documents are missing."""
+    return await build_report(db, days=days)
 
 
 # --------------------------------------------------------------------- listings
