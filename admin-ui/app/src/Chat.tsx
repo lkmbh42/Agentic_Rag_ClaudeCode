@@ -32,7 +32,7 @@ type Zoom = { path: string; alt: string };
 
 const VISUAL = new Set(["image", "chart", "diagram"]);
 const prettyName = (name?: string) =>
-  (name || "Document").replace(/\.[a-z0-9]{2,5}$/i, "").replace(/_+/g, " ").replace(/\s+/g, " ").trim();
+  (name || "Dokument").replace(/\.[a-z0-9]{2,5}$/i, "").replace(/_+/g, " ").replace(/\s+/g, " ").trim();
 const kindIcon = (t?: string) => (t === "table" ? "table" : VISUAL.has(t ?? "") ? "image" : "doc");
 
 function groupSessions(list: any[], filter: string): [string, any[]][] {
@@ -41,7 +41,7 @@ function groupSessions(list: any[], filter: string): [string, any[]][] {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const DAY = 86_400_000;
   const groups: [string, any[]][] = [
-    ["Today", []], ["Yesterday", []], ["Previous 7 days", []], ["Previous 30 days", []], ["Older", []],
+    ["Heute", []], ["Gestern", []], ["Letzte 7 Tage", []], ["Letzte 30 Tage", []], ["Älter", []],
   ];
   const sorted = [...list].sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
   for (const s of sorted) {
@@ -205,28 +205,28 @@ export function ChatApp({ email, isAdmin, onAdmin, onLogout }: {
   }, [messages]);
 
   const groups = useMemo(() => groupSessions(sessions, filter), [sessions, filter]);
-  const title = sid ? (sessions.find((s) => s.id === sid)?.title || "Conversation") : "New question";
+  const title = sid ? (sessions.find((s) => s.id === sid)?.title || "Unterhaltung") : "Neue Frage";
   const ready = library?.filter((d) => d.status === "indexed").length ?? 0;
 
   return (
     <div className={`app ${source ? "with-source" : ""}`}>
-      <aside className={`history ${navOpen ? "open" : ""}`} aria-label="Conversations">
+      <aside className={`history ${navOpen ? "open" : ""}`} aria-label="Unterhaltungen">
         <div className="history-top">
           <div className="brand"><span className="mark" aria-hidden="true">R</span>Recherche</div>
-          <button className="newq" onClick={newQuestion}><Icon name="plus" size={16} />New question</button>
+          <button className="newq" onClick={newQuestion}><Icon name="plus" size={16} />Neue Frage</button>
           <label className="search">
             <Icon name="search" size={15} />
             <input value={filter} onChange={(e) => setFilter(e.target.value)}
-              placeholder="Search conversations" aria-label="Search conversations" />
+              placeholder="Unterhaltungen durchsuchen" aria-label="Unterhaltungen durchsuchen" />
           </label>
         </div>
         <nav className="history-list">
           {!sessionsLoaded ? (
-            <div className="skeleton-list" aria-label="Loading conversations">
+            <div className="skeleton-list" aria-label="Unterhaltungen werden geladen">
               {Array.from({ length: 6 }, (_, i) => <span key={i} />)}
             </div>
           ) : groups.length === 0 ? (
-            <p className="history-empty">{filter ? "No conversation matches that search." : "Your questions will be listed here."}</p>
+            <p className="history-empty">{filter ? "Keine Unterhaltung passt zu dieser Suche." : "Ihre Fragen erscheinen hier."}</p>
           ) : groups.map(([label, items]) => (
             <section key={label}>
               <h2 className="history-label">{label}</h2>
@@ -234,7 +234,7 @@ export function ChatApp({ email, isAdmin, onAdmin, onLogout }: {
                 <button key={s.id} className={`history-item ${sid === s.id ? "active" : ""}`}
                   aria-current={sid === s.id ? "page" : undefined}
                   onClick={() => openSession(s.id)} title={s.title || ""}>
-                  {s.title || "Untitled question"}
+                  {s.title || "Frage ohne Titel"}
                 </button>
               ))}
             </section>
@@ -247,7 +247,7 @@ export function ChatApp({ email, isAdmin, onAdmin, onLogout }: {
           </div>
           <div className="foot-actions">
             {isAdmin && <button className="ghost" onClick={onAdmin}><Icon name="shield" size={16} />Admin</button>}
-            <button className="ghost" onClick={onLogout}><Icon name="out" size={16} />Sign out</button>
+            <button className="ghost" onClick={onLogout}><Icon name="out" size={16} />Abmelden</button>
           </div>
         </div>
       </aside>
@@ -255,13 +255,13 @@ export function ChatApp({ email, isAdmin, onAdmin, onLogout }: {
 
       <main className="desk">
         <header className="desk-head">
-          <button className="icon-btn only-narrow" onClick={() => setNavOpen(true)} aria-label="Show conversations">
+          <button className="icon-btn only-narrow" onClick={() => setNavOpen(true)} aria-label="Unterhaltungen anzeigen">
             <Icon name="menu" />
           </button>
           <h1 className="desk-title">{title}</h1>
           {library && (
             <span className="scope" title={library.map((d) => d.filename).join("\n")}>
-              <Icon name="doc" size={15} />{ready} {ready === 1 ? "document" : "documents"}
+              <Icon name="doc" size={15} />{ready} {ready === 1 ? "Dokument" : "Dokumente"}
             </span>
           )}
         </header>
@@ -269,7 +269,7 @@ export function ChatApp({ email, isAdmin, onAdmin, onLogout }: {
         <div className="thread" ref={threadRef} onScroll={onScroll}>
           <div className="thread-inner">
             {loadingSession ? (
-              <p className="thread-loading" role="status">Opening conversation…</p>
+              <p className="thread-loading" role="status">Unterhaltung wird geöffnet…</p>
             ) : turns.length === 0 ? (
               <EmptyState library={library} onPick={(q) => { setInput(q); inputRef.current?.focus(); }} />
             ) : turns.map((t, i) => (
@@ -292,14 +292,14 @@ export function ChatApp({ email, isAdmin, onAdmin, onLogout }: {
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); ask(); }
             }}
-            placeholder="Ask about your documents" aria-label="Your question" />
+            placeholder="Stellen Sie eine Frage zu Ihren Dokumenten" aria-label="Ihre Frage" />
           {busy ? (
-            <button type="button" className="send stop" onClick={stop} aria-label="Stop answering"><Icon name="stop" /></button>
+            <button type="button" className="send stop" onClick={stop} aria-label="Antwort stoppen"><Icon name="stop" /></button>
           ) : (
-            <button type="submit" className="send" disabled={!input.trim()} aria-label="Ask"><Icon name="send" /></button>
+            <button type="submit" className="send" disabled={!input.trim()} aria-label="Fragen"><Icon name="send" /></button>
           )}
         </form>
-        <p className="composer-note">Answers come only from your documents. Check the source before you rely on one.</p>
+        <p className="composer-note">Antworten stammen ausschließlich aus Ihren Dokumenten. Prüfen Sie die Quelle, bevor Sie sich darauf verlassen.</p>
       </main>
 
       {source && <SourcePage c={source} onClose={() => setSource(null)} onZoom={setZoom} />}
@@ -312,23 +312,23 @@ function EmptyState({ library, onPick }: { library: any[] | null; onPick: (q: st
   const docs = library ?? [];
   const ready = docs.filter((d) => d.status === "indexed");
   const suggestions = [
-    ...ready.slice(0, 2).map((d) => `Summarize the key points of “${prettyName(d.filename)}”`),
-    "What do the charts in my documents show?",
+    ...ready.slice(0, 2).map((d) => `Fassen Sie die wichtigsten Punkte von „${prettyName(d.filename)}“ zusammen`),
+    "Was zeigen die Diagramme in meinen Dokumenten?",
   ];
   return (
     <div className="empty">
-      <h2 className="empty-title">What do you want to find out?</h2>
-      <p className="empty-sub">Answers come only from your documents, with the page each one comes from.</p>
+      <h2 className="empty-title">Was möchten Sie herausfinden?</h2>
+      <p className="empty-sub">Antworten stammen ausschließlich aus Ihren Dokumenten – mit der Seite, aus der jede stammt.</p>
       <div className="empty-suggest">
         {suggestions.map((s) => (
           <button key={s} type="button" onClick={() => onPick(s)}>{s}</button>
         ))}
       </div>
       {library && (
-        <section className="library" aria-label="Your library">
-          <h3>Your library <span>{ready.length} of {docs.length} ready to search</span></h3>
+        <section className="library" aria-label="Ihre Bibliothek">
+          <h3>Ihre Bibliothek <span>{ready.length} von {docs.length} durchsuchbar</span></h3>
           {docs.length === 0 ? (
-            <p className="lib-none">No documents yet. Ask an admin to upload the files you need.</p>
+            <p className="lib-none">Noch keine Dokumente. Bitten Sie eine Administratorin oder einen Administrator, die benötigten Dateien hochzuladen.</p>
           ) : (
             <ul>
               {docs.slice(0, 8).map((d) => (
@@ -336,13 +336,13 @@ function EmptyState({ library, onPick }: { library: any[] | null; onPick: (q: st
                   <Icon name="doc" size={15} />
                   <span className="lib-name">{prettyName(d.filename)}</span>
                   <span className="lib-meta">
-                    {d.status !== "indexed" ? (d.status === "failed" ? "failed" : "indexing") : d.page_count ? `${d.page_count} pages` : ""}
+                    {d.status !== "indexed" ? (d.status === "failed" ? "fehlgeschlagen" : "wird indexiert") : d.page_count ? `${d.page_count} Seiten` : ""}
                   </span>
                 </li>
               ))}
             </ul>
           )}
-          {docs.length > 8 && <p className="lib-more">and {docs.length - 8} more</p>}
+          {docs.length > 8 && <p className="lib-more">und {docs.length - 8} weitere</p>}
         </section>
       )}
     </div>
@@ -354,7 +354,7 @@ function Pending({ streaming, count }: { streaming: string; count: number }) {
     return (
       <p className="searching" role="status">
         <span className="scan" aria-hidden="true" />
-        Searching {count || "your"} {count === 1 ? "document" : "documents"}…
+        Durchsuche {count || "Ihre"} {count === 1 ? "Dokument" : "Dokumente"}…
       </p>
     );
   }
@@ -376,12 +376,12 @@ function Answer({ m, active, onSource, onZoom }: {
   const cite = (n: number, key: string) => {
     const c = byMarker.get(n);
     if (!c || c.revoked) {
-      return <span key={key} className="cite-ref off" title="This source isn't available">{n}</span>;
+      return <span key={key} className="cite-ref off" title="Diese Quelle ist nicht verfügbar">{n}</span>;
     }
     return (
       <button key={key} type="button" className={`cite-ref ${active === c ? "on" : ""}`}
         onClick={() => onSource(c)}
-        aria-label={`Source ${n}: ${prettyName(c.file_name)}${c.page_number ? `, page ${c.page_number}` : ""}`}>
+        aria-label={`Quelle ${n}: ${prettyName(c.file_name)}${c.page_number ? `, Seite ${c.page_number}` : ""}`}>
         {n}
       </button>
     );
@@ -392,16 +392,16 @@ function Answer({ m, active, onSource, onZoom }: {
       .filter(([p]) => !!p),
   ).entries()).map(([path, c]) => ({
     path: path as string,
-    alt: `Figure from ${prettyName(c.file_name)}${c.page_number ? `, page ${c.page_number}` : ""}`,
+    alt: `Abbildung aus ${prettyName(c.file_name)}${c.page_number ? `, Seite ${c.page_number}` : ""}`,
   }));
 
   return (
     <div className="answer">
       {m.content && <div className="prose"><Markdown text={m.content} cite={cite} /></div>}
       {m.stopped && (
-        <p className="answer-flag">{m.content ? "Stopped. This answer is incomplete." : "Stopped before an answer was written."}</p>
+        <p className="answer-flag">{m.content ? "Angehalten. Diese Antwort ist unvollständig." : "Angehalten, bevor eine Antwort geschrieben wurde."}</p>
       )}
-      {m.insufficient && <p className="answer-flag">No passage in your documents supports an answer to this.</p>}
+      {m.insufficient && <p className="answer-flag">Keine Textstelle in Ihren Dokumenten stützt eine Antwort darauf.</p>}
       {figures.length > 0 && (
         <div className="figures">
           {figures.map((f) => (
@@ -411,12 +411,12 @@ function Answer({ m, active, onSource, onZoom }: {
       )}
       {cites.length > 0 && (
         <div className="sources">
-          <h3 className="sources-label">Sources</h3>
+          <h3 className="sources-label">Quellen</h3>
           <ol className="source-list">
             {cites.map((c) => (
               <li key={c.marker}>
                 {c.revoked ? (
-                  <span className="source off"><span className="source-num">{c.marker}</span>No longer available to you</span>
+                  <span className="source off"><span className="source-num">{c.marker}</span>Für Sie nicht mehr verfügbar</span>
                 ) : (
                   <button type="button" className={`source ${active === c ? "on" : ""}`} onClick={() => onSource(c)}>
                     <span className="source-num">{c.marker}</span>
@@ -450,16 +450,16 @@ function SourcePage({ c, onClose, onZoom }: { c: Citation; onClose: () => void; 
   }, [c, onClose]);
   const visual = VISUAL.has(c.chunk_type ?? "");
   const fig = figurePath(c);
-  const alt = `Figure from ${prettyName(c.file_name)}${c.page_number ? `, page ${c.page_number}` : ""}`;
+  const alt = `Abbildung aus ${prettyName(c.file_name)}${c.page_number ? `, Seite ${c.page_number}` : ""}`;
 
   return (
     <aside className="source-pane" aria-label={`Source ${c.marker}`}>
       <header className="source-head">
         <div className="source-head-text">
-          <p className="source-eyebrow">Source {c.marker}</p>
+          <p className="source-eyebrow">Quelle {c.marker}</p>
           <h2 className="source-title">{prettyName(c.file_name)}</h2>
         </div>
-        <button ref={closeRef} className="icon-btn" onClick={onClose} aria-label="Close source"><Icon name="close" /></button>
+        <button ref={closeRef} className="icon-btn" onClick={onClose} aria-label="Quelle schließen"><Icon name="close" /></button>
       </header>
       <div className="source-body">
         <div className="sheet">
@@ -475,7 +475,7 @@ function SourcePage({ c, onClose, onZoom }: { c: Citation; onClose: () => void; 
             <div className="sheet-text"><Markdown text={c.content || ""} cite={() => null} /></div>
           ) : (
             <div className="sheet-text">
-              {(c.content || "This source has no text.").split(/\n\s*\n/).filter((p) => p.trim()).map((p, i) => (
+              {(c.content || "Diese Quelle enthält keinen Text.").split(/\n\s*\n/).filter((p) => p.trim()).map((p, i) => (
                 <p key={i}><mark>{p.trim()}</mark></p>
               ))}
             </div>
@@ -483,13 +483,13 @@ function SourcePage({ c, onClose, onZoom }: { c: Citation; onClose: () => void; 
         </div>
         {visual && c.content && (
           <section className="generated">
-            <h3>Description of the figure</h3>
+            <h3>Beschreibung der Abbildung</h3>
             <div className="prose generated-text"><Markdown text={c.content} cite={() => null} /></div>
-            <p className="generated-note">Written by the AI when the document was added — not text from the document.</p>
+            <p className="generated-note">Von der KI beim Hinzufügen des Dokuments erstellt – kein Text aus dem Dokument.</p>
           </section>
         )}
         <p className="source-foot">
-          {visual ? "The answer was based on this figure." : "The answer was based on this passage."}
+          {visual ? "Die Antwort beruht auf dieser Abbildung." : "Die Antwort beruht auf dieser Textstelle."}
         </p>
       </div>
     </aside>
@@ -507,7 +507,7 @@ function CopyButton({ text }: { text: string }) {
   }
   return (
     <button type="button" className="act" onClick={copy}>
-      <Icon name={done ? "check" : "copy"} size={16} />{done ? "Copied" : "Copy"}
+      <Icon name={done ? "check" : "copy"} size={16} />{done ? "Kopiert" : "Kopieren"}
     </button>
   );
 }
@@ -531,15 +531,15 @@ function Feedback({ messageId, initial }: { messageId: string; initial?: string 
   return (
     <div className="feedback">
       <button type="button" className={`act icon-only ${rating === "up" ? "on" : ""}`} aria-pressed={rating === "up"}
-        onClick={() => send("up")} aria-label="Helpful" title="Helpful"><Icon name="up" size={16} /></button>
+        onClick={() => send("up")} aria-label="Hilfreich" title="Hilfreich"><Icon name="up" size={16} /></button>
       <button type="button" className={`act icon-only ${rating === "down" ? "on" : ""}`} aria-pressed={rating === "down"}
-        onClick={() => { setAsking((a) => !a); setSaved(false); }} aria-label="Not helpful" title="Not helpful">
+        onClick={() => { setAsking((a) => !a); setSaved(false); }} aria-label="Nicht hilfreich" title="Nicht hilfreich">
         <Icon name="down" size={16} />
       </button>
       {asking && (
         <form className="fb-form" onSubmit={(e) => { e.preventDefault(); send("down", reason.trim() || undefined); }}>
           <input autoFocus value={reason} onChange={(e) => setReason(e.target.value)}
-            placeholder="What was wrong? (optional)" aria-label="What was wrong" />
+            placeholder="Was war falsch? (optional)" aria-label="Was war falsch" />
           <button type="submit" className="primary small">Send</button>
         </form>
       )}

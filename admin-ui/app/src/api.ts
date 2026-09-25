@@ -40,14 +40,14 @@ function describe(status: number, detail: unknown): string {
       ? detail.map((d: any) => d?.msg).filter(Boolean).join(" · ")
       : "";
   switch (status) {
-    case 401: return "Your session has expired. Sign in again.";
-    case 403: return "You don't have access to this.";
-    case 413: return "This file is too large to upload.";
-    case 429: return "Too many requests. Wait a moment, then try again.";
-    case 503: return "The assistant is unavailable right now. Try again in a minute.";
+    case 401: return "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.";
+    case 403: return "Dafür fehlt Ihnen die Berechtigung.";
+    case 413: return "Diese Datei ist zu groß zum Hochladen.";
+    case 429: return "Zu viele Anfragen. Warten Sie einen Moment und versuchen Sie es erneut.";
+    case 503: return "Der Assistent ist gerade nicht erreichbar. Versuchen Sie es in einer Minute erneut.";
   }
-  if (status >= 500) return "The server hit an error. Try again, and tell an admin if it keeps happening.";
-  return text || `Request failed (${status}).`;
+  if (status >= 500) return "Auf dem Server ist ein Fehler aufgetreten. Versuchen Sie es erneut und informieren Sie eine Administratorin oder einen Administrator, falls es weiterhin auftritt.";
+  return text || `Anfrage fehlgeschlagen (${status}).`;
 }
 
 let refreshing: Promise<boolean> | null = null;
@@ -83,7 +83,7 @@ async function authFetch(path: string, init: RequestInit = {}, retry = true): Pr
     res = await fetch(`${BASE}${path}`, { ...init, headers, credentials: "include" });
   } catch (e: any) {
     if (e?.name === "AbortError") throw e;
-    throw new ApiError(0, "Can't reach the server. Check your connection and try again.");
+    throw new ApiError(0, "Server nicht erreichbar. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.");
   }
   if (res.status === 401 && retry && !path.startsWith("/auth/")) {
     if (await refreshTokens()) return authFetch(path, init, false);
@@ -104,7 +104,7 @@ async function req<T = any>(path: string, opts: RequestInit = {}): Promise<T> {
     // Sign-in failures must say what the server said ("Invalid credentials"),
     // not "session expired".
     const msg = path === "/auth/login" && res.status === 401
-      ? (typeof data?.detail === "string" ? data.detail : "Wrong email or password.")
+      ? (typeof data?.detail === "string" ? data.detail : "E-Mail-Adresse oder Passwort ist falsch.")
       : describe(res.status, data?.detail);
     throw new ApiError(res.status, msg);
   }
@@ -185,11 +185,11 @@ export const api = {
           try { payload = JSON.parse(data); } catch { continue; }
           if (event === "token") h.onToken?.(payload.token ?? "");
           else if (event === "done") h.onDone?.(payload);
-          else if (event === "error") h.onError?.(new ApiError(500, "The assistant hit an error while answering. Try asking again."));
+          else if (event === "error") h.onError?.(new ApiError(500, "Beim Beantworten ist ein Fehler aufgetreten. Bitte stellen Sie die Frage erneut."));
         }
       }
     } catch (e: any) {
-      h.onError?.(e?.name === "AbortError" ? e : new ApiError(0, "The connection dropped while answering. Try again."));
+      h.onError?.(e?.name === "AbortError" ? e : new ApiError(0, "Die Verbindung ist beim Antworten abgebrochen. Bitte versuchen Sie es erneut."));
     }
   },
   // listings

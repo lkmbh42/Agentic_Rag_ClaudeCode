@@ -37,7 +37,7 @@ export function ConfirmHost() {
         <h2 id="confirm-title">{req.title}</h2>
         {req.body && <div className="modal-body">{req.body}</div>}
         <div className="modal-actions">
-          <button ref={cancelRef} type="button" onClick={() => done(false)}>Cancel</button>
+          <button ref={cancelRef} type="button" onClick={() => done(false)}>Abbrechen</button>
           <button type="button" className={req.danger ? "danger-solid" : "primary"}
             onClick={() => done(true)}>{req.confirmLabel}</button>
         </div>
@@ -64,10 +64,10 @@ export function AuthImage({ path, alt, className, onClick }:
     return () => { live = false; if (revoke) URL.revokeObjectURL(revoke); };
   }, [path]);
   if (failed) return null;
-  if (!url) return <span className={`img-loading ${className ?? ""}`} aria-label="Loading image" />;
+  if (!url) return <span className={`img-loading ${className ?? ""}`} aria-label="Bild wird geladen" />;
   const img = <img className={className} src={url} alt={alt} />;
   return onClick
-    ? <button type="button" className="img-button" onClick={onClick} aria-label={`Enlarge: ${alt}`}>{img}</button>
+    ? <button type="button" className="img-button" onClick={onClick} aria-label={`Vergrößern: ${alt}`}>{img}</button>
     : img;
 }
 
@@ -83,7 +83,7 @@ export function Lightbox({ path, alt, onClose }: { path: string; alt: string; on
   }, [onClose]);
   return (
     <div className="lightbox" onClick={onClose} role="dialog" aria-modal="true" aria-label={alt}>
-      <button ref={closeRef} className="icon-btn lightbox-close" onClick={onClose} aria-label="Close">
+      <button ref={closeRef} className="icon-btn lightbox-close" onClick={onClose} aria-label="Schließen">
         <Icon name="close" />
       </button>
       <div className="lightbox-stage" onClick={(e) => e.stopPropagation()}>
@@ -133,9 +133,9 @@ export function PageHeader({ title, intro, children }: { title: string; intro?: 
 export function when(iso: string): string {
   const d = new Date(iso);
   const s = (Date.now() - d.getTime()) / 1000;
-  if (s < 60) return "just now";
-  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
-  if (s < 172800) return "yesterday";
-  return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: d.getFullYear() === new Date().getFullYear() ? undefined : "numeric" });
+  if (s < 60) return "gerade eben";
+  if (s < 3600) return `vor ${Math.floor(s / 60)} Min.`;
+  if (s < 86400) return `vor ${Math.floor(s / 3600)} Std.`;
+  if (s < 172800) return "gestern";
+  return d.toLocaleDateString("de-DE", { day: "numeric", month: "short", year: d.getFullYear() === new Date().getFullYear() ? undefined : "numeric" });
 }

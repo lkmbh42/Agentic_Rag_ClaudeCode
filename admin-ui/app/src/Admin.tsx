@@ -8,10 +8,10 @@ import { confirmAction, Notice, PageHeader, useData, when } from "./ui";
 type View = "ops" | "gaps" | "documents" | "collections" | "users" | "departments" | "permissions" | "audit";
 
 const NAV: { group: string; items: [View, string][] }[] = [
-  { group: "Insight", items: [["ops", "Live operations"], ["gaps", "Knowledge gaps"]] },
-  { group: "Library", items: [["documents", "Documents"], ["collections", "Collections"]] },
-  { group: "Access", items: [["users", "Users"], ["departments", "Departments"], ["permissions", "Permissions"]] },
-  { group: "Record", items: [["audit", "Audit log"]] },
+  { group: "Einblick", items: [["ops", "Live-Betrieb"], ["gaps", "Wissenslücken"]] },
+  { group: "Bibliothek", items: [["documents", "Dokumente"], ["collections", "Sammlungen"]] },
+  { group: "Zugriff", items: [["users", "Benutzer"], ["departments", "Abteilungen"], ["permissions", "Berechtigungen"]] },
+  { group: "Protokoll", items: [["audit", "Audit-Protokoll"]] },
 ];
 
 export function AdminApp({ email, onExit, onLogout }: { email: string; onExit: () => void; onLogout: () => void }) {
@@ -22,9 +22,9 @@ export function AdminApp({ email, onExit, onLogout }: { email: string; onExit: (
 
   return (
     <div className="admin">
-      <aside className={`admin-nav ${navOpen ? "open" : ""}`} aria-label="Admin sections">
+      <aside className={`admin-nav ${navOpen ? "open" : ""}`} aria-label="Admin-Bereiche">
         <div className="brand"><span className="mark" aria-hidden="true">R</span>Recherche <span className="brand-tag">Admin</span></div>
-        <button className="ghost back" onClick={onExit}><Icon name="back" size={16} />Back to questions</button>
+        <button className="ghost back" onClick={onExit}><Icon name="back" size={16} />Zurück zu den Fragen</button>
         {NAV.map((g) => (
           <section key={g.group}>
             <h2 className="nav-label">{g.group}</h2>
@@ -36,11 +36,11 @@ export function AdminApp({ email, onExit, onLogout }: { email: string; onExit: (
         ))}
         <div className="spacer" />
         <div className="who"><span className="avatar" aria-hidden="true">{(email[0] || "?").toUpperCase()}</span><span className="who-mail">{email}</span></div>
-        <button className="ghost" onClick={onLogout}><Icon name="out" size={16} />Sign out</button>
+        <button className="ghost" onClick={onLogout}><Icon name="out" size={16} />Abmelden</button>
       </aside>
       {navOpen && <div className="scrim" onClick={() => setNavOpen(false)} />}
       <main className="admin-main">
-        <button className="icon-btn only-narrow admin-menu" onClick={() => setNavOpen(true)} aria-label="Show admin sections">
+        <button className="icon-btn only-narrow admin-menu" onClick={() => setNavOpen(true)} aria-label="Admin-Bereiche anzeigen">
           <Icon name="menu" />
         </button>
         {view === "ops" && <Operations />}
@@ -61,32 +61,32 @@ function Operations() {
   const { data, error, reload } = useData(() => api.metrics());
   const m: any = data;
   const groups: [string, [string, any][]][] = m ? [
-    ["Answering", [
-      ["Median response", `${m.latency_ms.p50} ms`],
-      ["95th percentile", `${m.latency_ms.p95} ms`],
-      ["99th percentile", `${m.latency_ms.p99} ms`],
-      ["Answered from cache", `${(m.cache_hit_rate * 100).toFixed(1)}%`],
+    ["Antworten", [
+      ["Antwortzeit (Median)", `${m.latency_ms.p50} ms`],
+      ["95. Perzentil", `${m.latency_ms.p95} ms`],
+      ["99. Perzentil", `${m.latency_ms.p99} ms`],
+      ["Aus dem Cache", `${(m.cache_hit_rate * 100).toFixed(1)}%`],
     ]],
-    ["Library", [
-      ["Documents", m.counts.documents],
-      ["Collections", m.counts.collections],
-      ["Waiting to index", m.indexing_backlog],
-      ["Jobs in queue", m.queue_depth],
+    ["Bibliothek", [
+      ["Dokumente", m.counts.documents],
+      ["Sammlungen", m.counts.collections],
+      ["Wartet auf Indexierung", m.indexing_backlog],
+      ["Aufträge in Warteschlange", m.queue_depth],
     ]],
-    ["Quality", [
-      ["Answers evaluated", m.eval.scored],
-      ["Faithfulness", m.eval.avg_faithfulness ?? "—"],
-      ["Citation accuracy", m.eval.avg_citation_accuracy ?? "—"],
-      ["Users", m.counts.users],
+    ["Qualität", [
+      ["Bewertete Antworten", m.eval.scored],
+      ["Treue zur Quelle", m.eval.avg_faithfulness ?? "—"],
+      ["Zitatgenauigkeit", m.eval.avg_citation_accuracy ?? "—"],
+      ["Benutzer", m.counts.users],
     ]],
   ] : [];
   return (
     <>
-      <PageHeader title="Live operations" intro="How fast the assistant answers, and what's waiting to be indexed.">
-        <button onClick={reload}><Icon name="refresh" size={16} />Refresh</button>
+      <PageHeader title="Live-Betrieb" intro="Wie schnell der Assistent antwortet und was noch indexiert werden muss.">
+        <button onClick={reload}><Icon name="refresh" size={16} />Aktualisieren</button>
       </PageHeader>
       {error && <Notice kind="error">{error}</Notice>}
-      {!m ? <p className="muted">Loading…</p> : groups.map(([g, cards]) => (
+      {!m ? <p className="muted">Wird geladen…</p> : groups.map(([g, cards]) => (
         <section key={g} className="stat-group">
           <h2 className="section-label">{g}</h2>
           <div className="cards">
@@ -102,9 +102,9 @@ function Operations() {
 
 // ------------------------------------------------------------ knowledge gaps --
 const GAP_KIND: Record<string, [string, string]> = {
-  no_evidence: ["No evidence found", "bad"],
-  declined: ["Not in documents", "warn"],
-  negative_feedback: ["Rated not helpful", "bad"],
+  no_evidence: ["Kein Beleg gefunden", "bad"],
+  declined: ["Nicht in Dokumenten", "warn"],
+  negative_feedback: ["Nicht hilfreich", "bad"],
 };
 
 function KnowledgeGaps() {
@@ -114,32 +114,32 @@ function KnowledgeGaps() {
   const r: any = data;
   return (
     <>
-      <PageHeader title="Knowledge gaps"
-        intro="Questions the assistant couldn't answer well, most-asked first. Each one points at a document that's missing or unclear: add it, then ask again.">
-        <select value={days} aria-label="Time window" onChange={(e) => { setOpen(null); setDays(Number(e.target.value)); }}>
-          {[7, 30, 90, 365].map((d) => <option key={d} value={d}>Last {d} days</option>)}
+      <PageHeader title="Wissenslücken"
+        intro="Fragen, die der Assistent schlecht beantwortet hat – die häufigsten zuerst. Jede weist auf ein fehlendes oder unklares Dokument hin: fügen Sie es hinzu und fragen Sie erneut.">
+        <select value={days} aria-label="Zeitraum" onChange={(e) => { setOpen(null); setDays(Number(e.target.value)); }}>
+          {[7, 30, 90, 365].map((d) => <option key={d} value={d}>Letzte {d} Tage</option>)}
         </select>
-        <button onClick={reload}><Icon name="refresh" size={16} />Refresh</button>
+        <button onClick={reload}><Icon name="refresh" size={16} />Aktualisieren</button>
       </PageHeader>
       {error && <Notice kind="error">{error}</Notice>}
-      {!r ? <p className="muted">Loading…</p> : (
+      {!r ? <p className="muted">Wird geladen…</p> : (
         <>
           <div className="cards">
             {([
-              ["Questions asked", r.total_questions],
-              ["Unanswered or weak", r.gap_questions],
-              ["Gap rate", `${(r.gap_rate * 100).toFixed(1)}%`],
-              ["Rated not helpful", r.negative_feedback],
+              ["Gestellte Fragen", r.total_questions],
+              ["Unbeantwortet/schwach", r.gap_questions],
+              ["Lückenquote", `${(r.gap_rate * 100).toFixed(1)}%`],
+              ["Nicht hilfreich bewertet", r.negative_feedback],
             ] as [string, any][]).map(([label, val]) => (
               <div className="card" key={label}><div className="big">{val}</div><div className="label">{label}</div></div>
             ))}
           </div>
           {r.items.length === 0 ? (
-            <Notice kind="ok">No knowledge gaps in this period. Every question found supporting documents.</Notice>
+            <Notice kind="ok">Keine Wissenslücken in diesem Zeitraum. Jede Frage fand belegende Dokumente.</Notice>
           ) : (
             <div className="table-wrap">
               <table className="gaps">
-                <thead><tr><th>Question</th><th className="num">Asked</th><th className="num">People</th><th>Why</th><th>Last asked</th></tr></thead>
+                <thead><tr><th>Frage</th><th className="num">Gefragt</th><th className="num">Personen</th><th>Grund</th><th>Zuletzt</th></tr></thead>
                 <tbody>
                   {r.items.map((g: any, i: number) => (
                     <Fragment key={i}>
@@ -157,11 +157,11 @@ function KnowledgeGaps() {
                       {open === i && (
                         <tr className="gap-detail">
                           <td colSpan={5}>
-                            <p className="detail-label">Latest answer</p>
-                            <p className="detail-text">{g.sample_answer || "(empty answer)"}</p>
+                            <p className="detail-label">Letzte Antwort</p>
+                            <p className="detail-text">{g.sample_answer || "(leere Antwort)"}</p>
                             {g.feedback_reasons.length > 0 && (
                               <>
-                                <p className="detail-label">What people said was wrong</p>
+                                <p className="detail-label">Was Nutzer bemängelt haben</p>
                                 <ul className="detail-list">{g.feedback_reasons.map((x: string, j: number) => <li key={j}>{x}</li>)}</ul>
                               </>
                             )}
@@ -183,8 +183,8 @@ function KnowledgeGaps() {
 // ---------------------------------------------------------------- documents --
 const IN_FLIGHT = new Set(["pending", "processing"]);
 const STAGE_LABEL: Record<string, string> = {
-  queued: "Queued", parsing: "Reading pages", captioning: "Describing images",
-  indexing: "Indexing", indexed: "Ready", failed: "Failed", pending: "Queued", processing: "Processing",
+  queued: "In Warteschlange", parsing: "Seiten werden gelesen", captioning: "Bilder werden beschrieben",
+  indexing: "Wird indexiert", indexed: "Bereit", failed: "Fehlgeschlagen", pending: "In Warteschlange", processing: "Wird verarbeitet",
 };
 
 function Documents() {
@@ -208,13 +208,13 @@ function Documents() {
 
   async function upload(e: FormEvent) {
     e.preventDefault();
-    if (!coll || !file) { setMsg({ kind: "error", text: "Choose a collection and a file first." }); return; }
+    if (!coll || !file) { setMsg({ kind: "error", text: "Wählen Sie zuerst eine Sammlung und eine Datei." }); return; }
     setBusy(true); setMsg(null);
     try {
       const r: any = await api.uploadDocument(coll, file);
       setMsg(r.duplicate
-        ? { kind: "ok", text: `“${file.name}” is already in the library, so nothing was added.` }
-        : { kind: "ok", text: `“${file.name}” uploaded. It becomes searchable when indexing finishes.` });
+        ? { kind: "ok", text: `„${file.name}" ist bereits in der Bibliothek – es wurde nichts hinzugefügt.` }
+        : { kind: "ok", text: `„${file.name}" wurde hochgeladen und ist durchsuchbar, sobald die Indexierung abgeschlossen ist.` });
       setFile(null);
       if (fileRef.current) fileRef.current.value = "";
       reload();
@@ -224,9 +224,9 @@ function Documents() {
 
   async function reingest(d: any) {
     const ok = await confirmAction({
-      title: `Re-ingest “${d.filename}”?`,
-      body: "Its pages are read and its images described again. On this server that can take up to an hour, and the document can't be searched until it finishes.",
-      confirmLabel: "Re-ingest",
+      title: `„${d.filename}" neu einlesen?`,
+      body: "Die Seiten werden erneut gelesen und die Bilder neu beschrieben. Auf diesem Server kann das bis zu einer Stunde dauern; das Dokument ist bis zum Abschluss nicht durchsuchbar.",
+      confirmLabel: "Neu einlesen",
     });
     if (!ok) return;
     try { await api.reindexDocument(d.id); reload(); }
@@ -235,9 +235,9 @@ function Documents() {
 
   async function remove(d: any) {
     const ok = await confirmAction({
-      title: `Delete “${d.filename}”?`,
-      body: "The file and everything indexed from it are removed. Past answers that cited it lose that source. This can't be undone.",
-      confirmLabel: "Delete document", danger: true,
+      title: `„${d.filename}" löschen?`,
+      body: "Die Datei und alles daraus Indexierte werden entfernt. Frühere Antworten, die es zitiert haben, verlieren diese Quelle. Das kann nicht rückgängig gemacht werden.",
+      confirmLabel: "Dokument löschen", danger: true,
     });
     if (!ok) return;
     try { await api.deleteDocument(d.id); reload(); }
@@ -246,28 +246,28 @@ function Documents() {
 
   return (
     <>
-      <PageHeader title="Documents" intro="Everything the assistant can search. Uploads are indexed automatically; images take the longest.">
-        <button onClick={reload}><Icon name="refresh" size={16} />Refresh</button>
+      <PageHeader title="Dokumente" intro="Alles, was der Assistent durchsuchen kann. Uploads werden automatisch indexiert; Bilder dauern am längsten.">
+        <button onClick={reload}><Icon name="refresh" size={16} />Aktualisieren</button>
       </PageHeader>
       <form className="upload" onSubmit={upload}>
         <select value={coll} onChange={(e) => setColl(e.target.value)} aria-label="Collection">
-          <option value="">Choose a collection</option>
+          <option value="">Sammlung wählen</option>
           {colls.data?.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <label className="file-pick">
           <input ref={fileRef} type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           <Icon name="doc" size={16} />
-          <span>{file ? file.name : "Choose a file"}</span>
+          <span>{file ? file.name : "Datei wählen"}</span>
         </label>
-        <button className="primary" disabled={busy}><Icon name="upload" size={16} />{busy ? "Uploading…" : "Upload"}</button>
+        <button className="primary" disabled={busy}><Icon name="upload" size={16} />{busy ? "Wird hochgeladen…" : "Hochladen"}</button>
       </form>
       {msg && <Notice kind={msg.kind}>{msg.text}</Notice>}
       {error && <Notice kind="error">{error}</Notice>}
       <div className="table-wrap">
         <table>
-          <thead><tr><th>File</th><th>Collection</th><th>Status</th><th className="num">Pages</th><th><span className="sr-only">Actions</span></th></tr></thead>
+          <thead><tr><th>Datei</th><th>Sammlung</th><th>Status</th><th className="num">Seiten</th><th><span className="sr-only">Aktionen</span></th></tr></thead>
           <tbody>
-            {data?.length === 0 && <tr><td colSpan={5} className="muted">No documents yet. Upload the first one above.</td></tr>}
+            {data?.length === 0 && <tr><td colSpan={5} className="muted">Noch keine Dokumente. Laden Sie oben das erste hoch.</td></tr>}
             {data?.map((d: any) => (
               <tr key={d.id}>
                 <td className="strong">{d.filename}</td>
@@ -276,8 +276,8 @@ function Documents() {
                 <td className="num">{d.page_count ?? "—"}</td>
                 <td className="row-actions">
                   <button onClick={() => reingest(d)} disabled={IN_FLIGHT.has(d.status)}
-                    title={IN_FLIGHT.has(d.status) ? "Already indexing" : undefined}>Re-ingest</button>
-                  <button className="danger" onClick={() => remove(d)}>Delete</button>
+                    title={IN_FLIGHT.has(d.status) ? "Wird bereits indexiert" : undefined}>Neu einlesen</button>
+                  <button className="danger" onClick={() => remove(d)}>Löschen</button>
                 </td>
               </tr>
             ))}
@@ -303,7 +303,7 @@ function IngestCell({ doc, tick }: { doc: any; tick: number }) {
   return (
     <span className="ingest">
       <span className={`badge ${cls}`}>{STAGE_LABEL[stage] ?? stage}</span>
-      {job?.attempt && IN_FLIGHT.has(doc.status) ? <span className="muted"> · attempt {job.attempt + 1}</span> : null}
+      {job?.attempt && IN_FLIGHT.has(doc.status) ? <span className="muted"> · Versuch {job.attempt + 1}</span> : null}
       {why && <span className="fail-reason" title={why}>{why}</span>}
     </span>
   );
@@ -325,23 +325,23 @@ function Collections() {
   }
   return (
     <>
-      <PageHeader title="Collections" intro="Groups of documents. A collection belongs to a department, and its people can search it." />
+      <PageHeader title="Sammlungen" intro="Gruppen von Dokumenten. Eine Sammlung gehört zu einer Abteilung, deren Mitglieder sie durchsuchen können." />
       <form className="toolbar" onSubmit={create}>
-        <input required placeholder="Collection name" aria-label="Collection name" value={name} onChange={(e) => setName(e.target.value)} />
+        <input required placeholder="Name der Sammlung" aria-label="Name der Sammlung" value={name} onChange={(e) => setName(e.target.value)} />
         <select value={dept} onChange={(e) => setDept(e.target.value)} aria-label="Department">
-          <option value="">No department (admins only)</option>
+          <option value="">Keine Abteilung (nur Admins)</option>
           {depts.data?.map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}
         </select>
-        <button className="primary"><Icon name="plus" size={16} />Create collection</button>
+        <button className="primary"><Icon name="plus" size={16} />Sammlung erstellen</button>
       </form>
       {msg && <Notice kind="error">{msg}</Notice>}
       {error && <Notice kind="error">{error}</Notice>}
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Name</th><th>Department</th></tr></thead>
+          <thead><tr><th>Name</th><th>Abteilung</th></tr></thead>
           <tbody>
             {data?.map((c: any) => (
-              <tr key={c.id}><td className="strong">{c.name}</td><td className="muted">{c.department_id ? deptName.get(c.department_id) ?? "—" : "No department"}</td></tr>
+              <tr key={c.id}><td className="strong">{c.name}</td><td className="muted">{c.department_id ? deptName.get(c.department_id) ?? "—" : "Keine Abteilung"}</td></tr>
             ))}
           </tbody>
         </table>
@@ -367,30 +367,30 @@ function Users() {
     setMsg(null);
     try {
       await api.createUser({ email: email.trim(), password: pw, role, department_id: dept || null });
-      setMsg({ kind: "ok", text: `${email.trim()} can now sign in.` });
+      setMsg({ kind: "ok", text: `${email.trim()} kann sich jetzt anmelden.` });
       setEmail(""); setPw(""); reload();
     } catch (err: any) { setMsg({ kind: "error", text: err.message }); }
   }
   async function toggle(u: any) {
     if (u.is_active && !(await confirmAction({
-      title: `Suspend ${u.email}?`, body: "They're signed out and can't sign in until you reactivate them.",
-      confirmLabel: "Suspend", danger: true,
+      title: `${u.email} sperren?`, body: "Die Person wird abgemeldet und kann sich erst nach Reaktivierung wieder anmelden.",
+      confirmLabel: "Sperren", danger: true,
     }))) return;
     try { await api.updateUser(u.id, { is_active: !u.is_active }); reload(); }
     catch (err: any) { setMsg({ kind: "error", text: err.message }); }
   }
   async function revoke(u: any) {
     if (!(await confirmAction({
-      title: `Sign ${u.email} out everywhere?`, body: "All their active sessions end. They can sign in again right away.",
-      confirmLabel: "Sign out everywhere",
+      title: `${u.email} überall abmelden?`, body: "Alle aktiven Sitzungen werden beendet. Die Person kann sich sofort wieder anmelden.",
+      confirmLabel: "Überall abmelden",
     }))) return;
-    try { await api.revokeSessions(u.id); setMsg({ kind: "ok", text: `${u.email} was signed out everywhere.` }); }
+    try { await api.revokeSessions(u.id); setMsg({ kind: "ok", text: `${u.email} wurde überall abgemeldet.` }); }
     catch (err: any) { setMsg({ kind: "error", text: err.message }); }
   }
   async function reset(u: any) {
     if (!(await confirmAction({
-      title: `Reset ${u.email}'s password?`, body: "Their current password stops working. You get a temporary one to pass on.",
-      confirmLabel: "Reset password", danger: true,
+      title: `Passwort von ${u.email} zurücksetzen?`, body: "Das aktuelle Passwort wird ungültig. Sie erhalten ein temporäres zum Weitergeben.",
+      confirmLabel: "Passwort zurücksetzen", danger: true,
     }))) return;
     try { const r = await api.resetCredential(u.id); setTemp({ email: u.email, pw: r.temporary_password }); }
     catch (err: any) { setMsg({ kind: "error", text: err.message }); }
@@ -398,43 +398,43 @@ function Users() {
 
   return (
     <>
-      <PageHeader title="Users" intro="People who can sign in. Their department decides which collections they can search." />
+      <PageHeader title="Benutzer" intro="Personen, die sich anmelden können. Ihre Abteilung bestimmt, welche Sammlungen sie durchsuchen können." />
       <form className="toolbar" onSubmit={create}>
-        <input required type="email" placeholder="Email" aria-label="Email" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <input required type="password" placeholder="Initial password" aria-label="Initial password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} />
+        <input required type="email" placeholder="E-Mail" aria-label="E-Mail" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <input required type="password" placeholder="Anfangspasswort" aria-label="Anfangspasswort" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} />
         <select value={role} onChange={(e) => setRole(e.target.value)} aria-label="Role">
-          <option value="user">Employee</option><option value="admin">Admin</option>
+          <option value="user">Mitarbeiter/in</option><option value="admin">Admin</option>
         </select>
         <select value={dept} onChange={(e) => setDept(e.target.value)} aria-label="Department">
-          <option value="">No department</option>
+          <option value="">Keine Abteilung</option>
           {depts.data?.map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}
         </select>
-        <button className="primary"><Icon name="plus" size={16} />Add user</button>
+        <button className="primary"><Icon name="plus" size={16} />Benutzer hinzufügen</button>
       </form>
       {temp && (
         <div className="secret" role="status">
-          <p>Temporary password for <strong>{temp.email}</strong>. It's shown only once.</p>
+          <p>Temporäres Passwort für <strong>{temp.email}</strong>. Es wird nur einmal angezeigt.</p>
           <code>{temp.pw}</code>
-          <button onClick={() => navigator.clipboard?.writeText(temp.pw)}><Icon name="copy" size={16} />Copy</button>
-          <button className="ghost" onClick={() => setTemp(null)}>Done</button>
+          <button onClick={() => navigator.clipboard?.writeText(temp.pw)}><Icon name="copy" size={16} />Kopieren</button>
+          <button className="ghost" onClick={() => setTemp(null)}>Fertig</button>
         </div>
       )}
       {msg && <Notice kind={msg.kind}>{msg.text}</Notice>}
       {error && <Notice kind="error">{error}</Notice>}
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Email</th><th>Role</th><th>Department</th><th>Status</th><th><span className="sr-only">Actions</span></th></tr></thead>
+          <thead><tr><th>E-Mail</th><th>Rolle</th><th>Abteilung</th><th>Status</th><th><span className="sr-only">Aktionen</span></th></tr></thead>
           <tbody>
             {data?.map((u: any) => (
               <tr key={u.id}>
                 <td className="strong">{u.email}</td>
-                <td>{u.role === "admin" ? "Admin" : "Employee"}</td>
+                <td>{u.role === "admin" ? "Admin" : "Mitarbeiter/in"}</td>
                 <td className="muted">{u.department_id ? deptName.get(u.department_id) ?? "—" : "—"}</td>
-                <td><span className={`badge ${u.is_active ? "ok" : "bad"}`}>{u.is_active ? "Active" : "Suspended"}</span></td>
+                <td><span className={`badge ${u.is_active ? "ok" : "bad"}`}>{u.is_active ? "Aktiv" : "Gesperrt"}</span></td>
                 <td className="row-actions">
-                  <button onClick={() => toggle(u)}>{u.is_active ? "Suspend" : "Reactivate"}</button>
-                  <button onClick={() => revoke(u)}>Sign out everywhere</button>
-                  <button onClick={() => reset(u)}>Reset password</button>
+                  <button onClick={() => toggle(u)}>{u.is_active ? "Sperren" : "Reaktivieren"}</button>
+                  <button onClick={() => revoke(u)}>Überall abmelden</button>
+                  <button onClick={() => reset(u)}>Passwort zurücksetzen</button>
                 </td>
               </tr>
             ))}
@@ -458,10 +458,10 @@ function Departments() {
   }
   return (
     <>
-      <PageHeader title="Departments" intro="Teams. People in a department can search their department's collections." />
+      <PageHeader title="Abteilungen" intro="Teams. Mitglieder einer Abteilung können die Sammlungen ihrer Abteilung durchsuchen." />
       <form className="toolbar" onSubmit={create}>
-        <input required placeholder="Department name" aria-label="Department name" value={name} onChange={(e) => setName(e.target.value)} />
-        <button className="primary"><Icon name="plus" size={16} />Create department</button>
+        <input required placeholder="Name der Abteilung" aria-label="Name der Abteilung" value={name} onChange={(e) => setName(e.target.value)} />
+        <button className="primary"><Icon name="plus" size={16} />Abteilung erstellen</button>
       </form>
       {msg && <Notice kind="error">{msg}</Notice>}
       {error && <Notice kind="error">{error}</Notice>}
@@ -512,52 +512,52 @@ function Permissions() {
     try { await api.editPermission(p.id, lvl); reload(); } catch (err: any) { setMsg(err.message); }
   }
   async function revoke(p: any) {
-    const who = names.get(p.principal_id) ?? "This principal";
+    const who = names.get(p.principal_id) ?? "Diese Entität";
     if (!(await confirmAction({
-      title: "Remove this access?",
-      body: `${who} loses ${p.access_level} access to ${names.get(p.resource_id) ?? "the collection"}. Cached answers built on it are cleared.`,
-      confirmLabel: "Remove access", danger: true,
+      title: "Diesen Zugriff entfernen?",
+      body: `${who} verliert den Zugriff (${p.access_level}) auf ${names.get(p.resource_id) ?? "die Sammlung"}. Darauf beruhende zwischengespeicherte Antworten werden gelöscht.`,
+      confirmLabel: "Zugriff entfernen", danger: true,
     }))) return;
     try { await api.revokePermission(p.id); reload(); } catch (err: any) { setMsg(err.message); }
   }
 
   return (
     <>
-      <PageHeader title="Permissions" intro="Give a person or department access to a collection outside their own department." />
+      <PageHeader title="Berechtigungen" intro="Geben Sie einer Person oder Abteilung Zugriff auf eine Sammlung außerhalb der eigenen Abteilung." />
       <form className="toolbar" onSubmit={grant}>
-        <select value={principalType} aria-label="Grant to" onChange={(e) => { setPT(e.target.value); setPID(""); }}>
-          <option value="user">A person</option><option value="department">A department</option>
+        <select value={principalType} aria-label="Gewähren an" onChange={(e) => { setPT(e.target.value); setPID(""); }}>
+          <option value="user">Eine Person</option><option value="department">Eine Abteilung</option>
         </select>
         <select required value={principalId} aria-label={principalType === "user" ? "Person" : "Department"} onChange={(e) => setPID(e.target.value)}>
-          <option value="">{principalType === "user" ? "Choose a person" : "Choose a department"}</option>
+          <option value="">{principalType === "user" ? "Person wählen" : "Abteilung wählen"}</option>
           {principals?.map((p: any) => <option key={p.id} value={p.id}>{p.email ?? p.name}</option>)}
         </select>
-        <select required value={resourceId} aria-label="Collection" onChange={(e) => setRID(e.target.value)}>
-          <option value="">Choose a collection</option>
+        <select required value={resourceId} aria-label="Sammlung" onChange={(e) => setRID(e.target.value)}>
+          <option value="">Sammlung wählen</option>
           {colls.data?.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <select value={level} aria-label="Access level" onChange={(e) => setLevel(e.target.value)}>
-          <option value="read">Can search</option><option value="write">Can upload</option><option value="admin">Can manage</option>
+        <select value={level} aria-label="Zugriffsstufe" onChange={(e) => setLevel(e.target.value)}>
+          <option value="read">Darf durchsuchen</option><option value="write">Darf hochladen</option><option value="admin">Darf verwalten</option>
         </select>
-        <button className="primary"><Icon name="plus" size={16} />Grant access</button>
+        <button className="primary"><Icon name="plus" size={16} />Zugriff gewähren</button>
       </form>
       {msg && <Notice kind="error">{msg}</Notice>}
       {error && <Notice kind="error">{error}</Notice>}
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Who</th><th>Collection</th><th>Access</th><th><span className="sr-only">Actions</span></th></tr></thead>
+          <thead><tr><th>Wer</th><th>Sammlung</th><th>Zugriff</th><th><span className="sr-only">Aktionen</span></th></tr></thead>
           <tbody>
-            {data?.length === 0 && <tr><td colSpan={4} className="muted">No extra access granted. Everyone searches their own department's collections.</td></tr>}
+            {data?.length === 0 && <tr><td colSpan={4} className="muted">Kein zusätzlicher Zugriff gewährt. Alle durchsuchen die Sammlungen ihrer eigenen Abteilung.</td></tr>}
             {data?.map((p: any) => (
               <tr key={p.id}>
-                <td className="strong">{names.get(p.principal_id) ?? "Unknown"} <span className="muted">· {p.principal_type === "user" ? "person" : "department"}</span></td>
-                <td>{names.get(p.resource_id) ?? "Unknown collection"}</td>
+                <td className="strong">{names.get(p.principal_id) ?? "Unbekannt"} <span className="muted">· {p.principal_type === "user" ? "Person" : "Abteilung"}</span></td>
+                <td>{names.get(p.resource_id) ?? "Unbekannte Sammlung"}</td>
                 <td>
-                  <select value={p.access_level} aria-label="Access level" onChange={(e) => change(p, e.target.value)}>
-                    <option value="read">Can search</option><option value="write">Can upload</option><option value="admin">Can manage</option>
+                  <select value={p.access_level} aria-label="Zugriffsstufe" onChange={(e) => change(p, e.target.value)}>
+                    <option value="read">Darf durchsuchen</option><option value="write">Darf hochladen</option><option value="admin">Darf verwalten</option>
                   </select>
                 </td>
-                <td className="row-actions"><button className="danger" onClick={() => revoke(p)}>Remove</button></td>
+                <td className="row-actions"><button className="danger" onClick={() => revoke(p)}>Entfernen</button></td>
               </tr>
             ))}
           </tbody>
@@ -579,34 +579,34 @@ function Audit() {
 
   function summary(a: any): string {
     const d = a.detail || {};
-    if (d.query) return `“${d.query}”${d.insufficient ? " — no evidence found" : ""}`;
+    if (d.query) return `„${d.query}"${d.insufficient ? " — kein Beleg gefunden" : ""}`;
     const keys = Object.keys(d).filter((k) => !/(_id|sha256|request_id)$/.test(k));
     return keys.slice(0, 3).map((k) => `${k.replace(/_/g, " ")}: ${typeof d[k] === "object" ? JSON.stringify(d[k]) : d[k]}`).join(" · ");
   }
 
   return (
     <>
-      <PageHeader title="Audit log" intro="Who did what, and when. The 200 most recent events.">
-        <select value={filter} aria-label="Filter by action" onChange={(e) => setFilter(e.target.value)}>
-          <option value="">All actions</option>
+      <PageHeader title="Audit-Protokoll" intro="Wer hat was getan – und wann. Die 200 neuesten Ereignisse.">
+        <select value={filter} aria-label="Nach Aktion filtern" onChange={(e) => setFilter(e.target.value)}>
+          <option value="">Alle Aktionen</option>
           {actions.map((a) => <option key={a} value={a}>{a}</option>)}
         </select>
-        <button onClick={reload}><Icon name="refresh" size={16} />Refresh</button>
+        <button onClick={reload}><Icon name="refresh" size={16} />Aktualisieren</button>
       </PageHeader>
       {error && <Notice kind="error">{error}</Notice>}
       <div className="table-wrap">
         <table>
-          <thead><tr><th>When</th><th>Action</th><th>Who</th><th>Details</th></tr></thead>
+          <thead><tr><th>Wann</th><th>Aktion</th><th>Wer</th><th>Details</th></tr></thead>
           <tbody>
             {rows.map((a: any) => (
               <tr key={a.id}>
                 <td className="nowrap muted" title={new Date(a.created_at).toLocaleString()}>{when(a.created_at)}</td>
                 <td className="nowrap"><span className="badge">{human(a.action)}</span></td>
-                <td className="muted">{a.user_id ? email.get(a.user_id) ?? "Deleted user" : "System"}</td>
+                <td className="muted">{a.user_id ? email.get(a.user_id) ?? "Gelöschter Benutzer" : "System"}</td>
                 <td className="audit-detail">
                   {summary(a)}
                   {a.detail && (
-                    <details><summary>Raw</summary><pre>{JSON.stringify(a.detail, null, 2)}</pre></details>
+                    <details><summary>Rohdaten</summary><pre>{JSON.stringify(a.detail, null, 2)}</pre></details>
                   )}
                 </td>
               </tr>
