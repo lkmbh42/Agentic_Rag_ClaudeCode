@@ -77,3 +77,4 @@ class AuditAction(str, enum.Enum):
     ADMIN_ACTION = "admin_action"
     PERMISSION_CHANGE = "permission_change"
     DOCUMENT_DELETE = "document_delete"
+    CONVERSATION_DELETE = "conversation_delete"

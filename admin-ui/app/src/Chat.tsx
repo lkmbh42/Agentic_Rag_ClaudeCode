@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, figurePath } from "./api";
 import { Icon } from "./icons";
 import { Markdown } from "./markdown";
-import { AuthImage, Lightbox, Notice } from "./ui";
+import { AuthImage, confirmAction, Lightbox, Notice } from "./ui";
 
 type Citation = {
   marker: number;
@@ -149,6 +149,22 @@ export function ChatApp({ email, isAdmin, onAdmin, onLogout }: {
     inputRef.current?.focus();
   }
 
+  async function deleteSession(s: any) {
+    const ok = await confirmAction({
+      title: "Unterhaltung löschen?",
+      body: `„${s.title || "Frage ohne Titel"}" und ihre Antworten werden dauerhaft entfernt. Das kann nicht rückgängig gemacht werden.`,
+      confirmLabel: "Löschen", danger: true,
+    });
+    if (!ok) return;
+    try {
+      await api.deleteChatSession(s.id);
+      setSessions((list) => list.filter((x) => x.id !== s.id));
+      if (sid === s.id) newQuestion();     // was open: clear the thread
+    } catch (e: any) {
+      setError(e.message);
+    }
+  }
+
   async function ask(text?: string) {
     const q = (text ?? input).trim();
     if (!q || busy) return;
@@ -231,11 +247,16 @@ export function ChatApp({ email, isAdmin, onAdmin, onLogout }: {
             <section key={label}>
               <h2 className="history-label">{label}</h2>
               {items.map((s) => (
-                <button key={s.id} className={`history-item ${sid === s.id ? "active" : ""}`}
-                  aria-current={sid === s.id ? "page" : undefined}
-                  onClick={() => openSession(s.id)} title={s.title || ""}>
-                  {s.title || "Frage ohne Titel"}
-                </button>
+                <div key={s.id} className={`history-item ${sid === s.id ? "active" : ""}`}>
+                  <button className="history-open" aria-current={sid === s.id ? "page" : undefined}
+                    onClick={() => openSession(s.id)} title={s.title || ""}>
+                    {s.title || "Frage ohne Titel"}
+                  </button>
+                  <button className="history-del" onClick={() => deleteSession(s)}
+                    aria-label={`Unterhaltung löschen: ${s.title || "Frage ohne Titel"}`} title="Löschen">
+                    <Icon name="trash" size={15} />
+                  </button>
+                </div>
               ))}
             </section>
           ))}

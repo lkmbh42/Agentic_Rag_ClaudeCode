@@ -22,6 +22,7 @@ const PATHS: Record<string, JSX.Element> = {
   upload: <><path d="M12 15V4.5M7.5 9 12 4.5 16.5 9" /><path d="M4.5 15v3a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-3" /></>,
   expand: <path d="M14 4.5h5.5V10M10 19.5H4.5V14M19.5 4.5 13 11M4.5 19.5 11 13" />,
   alert: <><path d="M12 4 21 19.5H3Z" /><path d="M12 10v4M12 16.8v.2" /></>,
+  trash: <><path d="M4.5 6.5h15M9 6.5V5a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 5v1.5" /><path d="M6.5 6.5 7.3 19a1.5 1.5 0 0 0 1.5 1.4h6.4a1.5 1.5 0 0 0 1.5-1.4l.8-12.5" /></>,
 };
 
 export function Icon({ name, size = 18, label }: { name: string; size?: number; label?: string }) {

@@ -14,7 +14,7 @@ import threading
 import time
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
@@ -278,6 +278,26 @@ async def list_sessions(
         .order_by(ChatSession.created_at.desc())
     )
     return list(result.scalars().all())
+
+
+@router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT,
+               response_class=Response)
+async def delete_session(
+    session_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """Delete one of the caller's own conversations. Messages and feedback go
+    with it (FK cascade). 404 (not 403) for a session the user doesn't own, so
+    the endpoint never confirms that someone else's conversation exists."""
+    session = await _owned_session(session_id, user, db)
+    await db.delete(session)
+    await record_audit(
+        db, action=AuditAction.CONVERSATION_DELETE, user_id=user.id,
+        resource_type="chat_session", resource_id=str(session_id),
+    )
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/sessions/{session_id}", response_model=ChatSessionDetail)

@@ -141,6 +141,7 @@ export const api = {
   // chat (employee-facing)
   chatSessions: () => req<any[]>("/chat/sessions"),
   chatSession: (id: string) => req<any>(`/chat/sessions/${id}`),
+  deleteChatSession: (id: string) => req<void>(`/chat/sessions/${id}`, { method: "DELETE" }),
   async chatStream(message: string, sessionId: string | null, h: StreamHandlers) {
     let res: Response;
     try {
