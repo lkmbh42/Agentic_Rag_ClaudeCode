@@ -15,6 +15,17 @@ import re
 from app.graph.state import INSUFFICIENT_ANSWER
 
 _CITE = re.compile(r"\[(\d+)\]")
+# gpt-oss was trained on a browsing-tool citation format and sometimes emits
+# it instead of the requested [n]: "【1†L1-L2】", "【3†source】". Unrecognized,
+# those markers yield NO citations (the answer shows no sources) and leak raw
+# glyphs into the text.
+_NATIVE_CITE = re.compile(r"【\s*(\d+)\s*(?:†[^】]*)?】")
+
+
+def normalize_markers(answer: str) -> str:
+    """Rewrite model-native citation markers to the [n] form the UI and the
+    extractor understand. Idempotent; [n] markers pass through untouched."""
+    return _NATIVE_CITE.sub(r"[\1]", answer) if answer else answer
 
 
 def extract_citations(answer: str, chunks: list[dict]) -> list[dict]:

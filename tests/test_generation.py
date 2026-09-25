@@ -7,7 +7,7 @@ import uuid
 
 from app.graph.builder import build_graph
 from app.graph.checkpointer import build_checkpointer
-from app.graph.citations import extract_citations
+from app.graph.citations import extract_citations, normalize_markers
 from app.graph.state import INSUFFICIENT_ANSWER
 from tests.fakes import FakeCache, FakeLLM, FakeRedis, FakeRetriever
 
@@ -30,6 +30,17 @@ def test_citations_drop_out_of_range_no_fabrication():
 
 def test_insufficient_answer_has_no_citations():
     assert extract_citations(INSUFFICIENT_ANSWER, _CHUNKS) == []
+
+
+def test_native_gpt_oss_markers_are_normalized_and_cited():
+    # Real gpt-oss output: without normalization this answer lost all sources.
+    raw = "Im Lichtenholz 60, 35043 Marburg 【1†L1-L2】 【2†source】"
+    fixed = normalize_markers(raw)
+    assert fixed == "Im Lichtenholz 60, 35043 Marburg [1] [2]"
+    assert [c["marker"] for c in extract_citations(fixed, _CHUNKS)] == [1, 2]
+    # Idempotent, and plain [n] answers are untouched.
+    assert normalize_markers(fixed) == fixed
+    assert normalize_markers("Drei Tage [1].") == "Drei Tage [1]."
 
 
 def _run(llm, conninfo, cache=None):

@@ -12,7 +12,7 @@ import uuid
 import redis as sync_redis
 
 from app.config import get_settings
-from app.graph.citations import extract_citations
+from app.graph.citations import extract_citations, normalize_markers
 from app.llm.client import LLMClient
 from app.graph.state import INSUFFICIENT_ANSWER, GraphState
 from app.retrieval.retriever import Retriever
@@ -26,6 +26,27 @@ _settings = get_settings()
 
 def _bump(state: GraphState) -> int:
     return state.get("iterations", 0) + 1
+
+
+# Words that point back at the previous turn. Articles (der/die/das/the) are
+# deliberately absent: they start most self-contained questions too.
+_REFERS_BACK = {
+    "es", "dazu", "davon", "darüber", "damit", "dort", "dies", "diese", "dieser",
+    "dieses", "denen", "mehr", "it", "that", "this", "those", "they", "there", "more",
+}
+_FOLLOW_UP_OPENERS = ("und ", "and ", "what about", "was ist mit", "wie ist es mit", "auch ")
+
+
+def is_follow_up(question: str) -> bool:
+    """True when a question only makes sense with the previous turn: very short
+    ("und in Kirchhain?"), opened like a continuation ("und …", "what about …"),
+    or short-ish with a word that refers back ("wie viele sind es?")."""
+    q = question.strip().lower()
+    words = [w.strip("?!.,;:\"'„“”()") for w in q.split()]
+    words = [w for w in words if w]
+    if len(words) <= 3 or q.startswith(_FOLLOW_UP_OPENERS):
+        return True
+    return len(words) <= 8 and any(w in _REFERS_BACK for w in words)
 
 
 def _uuids(ids: list[str]) -> set[uuid.UUID]:
@@ -121,9 +142,12 @@ class Nodes:
     def retriever_node(self, state: GraphState) -> dict:
         allowed = _uuids(state.get("allowed_collection_ids", []))
         query = state.get("rewritten_query") or state["query"]
-        # Contextualize a follow-up with the previous user turn so a vague query
-        # ("tell me more") still retrieves the right topic.
-        if not state.get("rewritten_query"):
+        # Contextualize a FOLLOW-UP with the previous user turn so a vague query
+        # ("tell me more", "und in Kirchhain?") still retrieves the right topic.
+        # A self-contained question is searched as asked: prepending the previous
+        # topic dragged retrieval back to it (a new question about addresses asked
+        # after one about the Hessentag found only Hessentag chunks).
+        if not state.get("rewritten_query") and is_follow_up(query):
             prior = [m["content"] for m in state.get("messages", [])
                      if m.get("role") == "user"][:-1]
             if prior:
@@ -202,6 +226,7 @@ class Nodes:
         elapsed = (time.perf_counter() - t0) * 1000
         # Citations come ONLY from [n] markers the model actually wrote, mapped
         # against the exact packed context (not the raw retrieval set).
+        answer = normalize_markers(answer)  # 【1†…】 -> [1], so sources aren't lost
         citations = extract_citations(answer, assembled.packed_chunks)
         return {"iterations": _bump(state), "answer": answer,
                 "citations": citations, "generation_latency_ms": elapsed,
