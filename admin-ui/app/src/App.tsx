@@ -45,7 +45,7 @@ export default function App() {
 
   let screen;
   if (phase === "booting") {
-    screen = <div className="boot" role="status" aria-label="Wird geladen"><span className="mark" aria-hidden="true">R</span></div>;
+    screen = <div className="boot" role="status" aria-label="Wird geladen…"><span className="mark" aria-hidden="true">R</span></div>;
   } else if (phase === "out" || !me) {
     screen = <Login notice={notice} onLogin={() => { setNotice(""); enter(); }} />;
   } else if (mode === "admin" && me.role === "admin") {

@@ -65,7 +65,7 @@ export function AuthImage({ path, alt, className, onClick }:
   }, [path]);
   if (failed) return null;
   if (!url) return <span className={`img-loading ${className ?? ""}`} aria-label="Bild wird geladen" />;
-  const img = <img className={className} src={url} alt={alt} />;
+  const img = <img className={className} src={url} alt={alt} loading="lazy" decoding="async" />;
   return onClick
     ? <button type="button" className="img-button" onClick={onClick} aria-label={`Vergrößern: ${alt}`}>{img}</button>
     : img;

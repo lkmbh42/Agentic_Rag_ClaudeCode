@@ -53,6 +53,7 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; }
+html { color-scheme: dark; }           /* native scrollbars/controls/autofill render dark */
 html, body, #root { height: 100%; }
 body {
   margin: 0;
@@ -63,9 +64,15 @@ body {
   text-rendering: optimizeLegibility;
 }
 h1, h2, h3, h4, p { margin: 0; }
+h1, h2, .question, .empty-title { text-wrap: balance; }   /* no orphaned last word */
 button, input, select, textarea { font: inherit; color: inherit; }
+/* Kill the 300ms tap delay and the grey mobile tap flash on everything tappable. */
+button, a, select, summary, [role="button"], [tabindex] { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 ::selection { background: rgba(124, 139, 255, .35); }
 * { scrollbar-width: thin; scrollbar-color: var(--surface-3) transparent; }
+/* Keep a scroll gesture inside its panel instead of chaining to the page. */
+.thread, .history-list, .admin-main, .source-body, .table-wrap,
+.modal-backdrop, .lightbox { overscroll-behavior: contain; }
 
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -191,6 +198,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 .history-item {
   display: flex; align-items: center; border-radius: 7px; color: var(--muted);
+  /* Conversation lists reach hundreds of rows; let the browser skip painting the
+     off-screen ones (zero-dependency virtualization). The reserved size keeps the
+     scrollbar honest. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 38px;
 }
 .history-item:hover, .history-item.active { background: var(--surface-2); color: var(--text); }
 .history-item.active { box-shadow: inset 2px 0 0 var(--accent); }

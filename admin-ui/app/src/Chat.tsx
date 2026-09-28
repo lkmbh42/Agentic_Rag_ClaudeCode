@@ -232,8 +232,9 @@ export function ChatApp({ email, isAdmin, onAdmin, onLogout }: {
           <button className="newq" onClick={newQuestion}><Icon name="plus" size={16} />Neue Frage</button>
           <label className="search">
             <Icon name="search" size={15} />
-            <input value={filter} onChange={(e) => setFilter(e.target.value)}
-              placeholder="Unterhaltungen durchsuchen" aria-label="Unterhaltungen durchsuchen" />
+            <input type="search" value={filter} onChange={(e) => setFilter(e.target.value)}
+              autoComplete="off" spellCheck={false}
+              placeholder="Unterhaltungen durchsuchen…" aria-label="Unterhaltungen durchsuchen" />
           </label>
         </div>
         <nav className="history-list">
@@ -313,7 +314,7 @@ export function ChatApp({ email, isAdmin, onAdmin, onLogout }: {
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); ask(); }
             }}
-            placeholder="Stellen Sie eine Frage zu Ihren Dokumenten" aria-label="Ihre Frage" />
+            placeholder="Stellen Sie eine Frage zu Ihren Dokumenten…" aria-label="Ihre Frage" />
           {busy ? (
             <button type="button" className="send stop" onClick={stop} aria-label="Antwort stoppen"><Icon name="stop" /></button>
           ) : (
