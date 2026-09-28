@@ -23,6 +23,14 @@ venv/
 # Node / admin-ui build artifacts (Phase 9)
 admin-ui/app/node_modules/
 admin-ui/app/dist/
+admin-ui/app/*.tsbuildinfo
+
+# Playwright E2E artifacts + saved auth session (never commit credentials/state)
+admin-ui/app/test-results/
+admin-ui/app/playwright-report/
+admin-ui/app/blob-report/
+admin-ui/app/.playwright/
+admin-ui/app/tests/e2e/.auth/
 
 # OS / editor
 .DS_Store
